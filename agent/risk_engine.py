@@ -23,6 +23,7 @@ class RiskContext:
     halt_new_entries: bool = False
     alerts_ready: bool = True
     integration_opens_sent: int = 0   # skickade riktiga öppningar i databasen (integrationsläge)
+    integration_armed: bool = False   # control.integration_armed: en enda affär får passera kill switch
 
 
 class RiskEngine:
@@ -58,7 +59,7 @@ class RiskEngine:
             why.append("marknadsdata saknas eller är gammal")
         if not c.fx or not c.fx.realtime or (c.now - c.fx.time).total_seconds() > cfg.fx_max_age_s:
             why.append("USDSEK saknas eller är gammal")
-        if c.kill_switch:
+        if c.kill_switch and not self._armed_integration(c):
             why.append("kill switch på")
         if not c.alerts_ready:
             why.append("larm (e-post) ej konfigurerat")
@@ -75,6 +76,10 @@ class RiskEngine:
         why += self._stop_and_size(ta, c)
         why += self._loss_limits(c)
         return why
+
+    def _armed_integration(self, c: RiskContext) -> bool:
+        """Bara den första riktiga öppningen i integrationsläge, och bara när den är armerad för hand."""
+        return c.integration_armed and self.cfg.real and self.cfg.integration_trade and c.integration_opens_sent == 0
 
     def _stop_and_size(self, ta: TradeAction, c: RiskContext) -> list[str]:
         why, e, s, t = [], ta.proposed_entry, ta.proposed_stop, ta.proposed_target

@@ -60,6 +60,8 @@ create table if not exists control (
     updated_at        timestamptz not null default now()
 );
 insert into control (id) values (1) on conflict do nothing;
+-- En enda armerad integrationsaffär får passera kill switch (bara REAL_MICRO + REAL_MICRO_INTEGRATION=1).
+alter table control add column if not exists integration_armed boolean not null default false;
 
 -- Supabase exponerar public-schemat via sitt REST-API. RLS utan policyer stänger det helt;
 -- agenten ansluter direkt som databasägare och påverkas inte.
