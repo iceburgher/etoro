@@ -1,12 +1,13 @@
-"""Ren jämförelse: köp och behåll, SMA200, SMA200 med buffert, gld-v1.1. Samma data, samma kostnader.
+"""Ren jämförelse: köp och behåll, SMA200, SMA200 med buffert, gld-v1.1. Samma kostnadsmodell för alla.
 
-Kör: python -m research.compare <h4_full.json> [startdatum, standard 2016-09-01]
-Data: eToros GLD CFD (3025), 4H-staplar från 2015-11. Dagsstaplar byggs av 4H-staplarna per UTC-dygn
-(avviker i snitt 0,03 % från eToros egna dagsstaplar). Före 2026 finns 4H-staplar bara under ETF:ens
-handelstimmar (cirka 2–3 per dag), i live-drift 6 per dag: gld-v1.1 beter sig därför inte exakt som live.
+Kör: python -m research.compare <h4_full.json> <d1_full.json> <gld-v1.1 från, t.ex. 2026-05-11>
+Datakällor (eToro GET /api/v1/data/instruments/3025/candles, instrument GLD CFD):
+- Dagsstrategierna körs på eToros egna dagsstaplar (interval=1d, från 2018-08), inte rekonstruerade.
+- gld-v1.1 körs bara där 4H-datan har samma struktur som live (24/5 sedan vecka 2026-W18), med regim från
+  native dagsstaplar. Före dess handlades instrumentet bara under börstid (se research/audit.py).
 
 Regler, fasta i förväg (ingen optimering):
-- SMA200 = snittet av de 200 senaste dagliga stängningarna. Signal på stängning, affär på nästa dags öppning.
+- SMA200 = snittet av de 200 senaste dagliga stängningarna. Signal på stängning, affär på nästa stapels öppning.
 - Buffert: köp när stängning > SMA200 × 1,02, sälj när stängning < SMA200 × 0,98. 2 % valt i förväg.
 - gld-v1.1: fryst strategi (agent/strategy_v1.py) via research/backtest.py. Risk 0,5 % av aktuellt kapital
   per affär, hävstång 2x, affär hoppas över om exponeringen skulle bli > 50 % av kapitalet (som live).
@@ -32,14 +33,6 @@ RISK, LEV, MAX_EXPO = 0.005, 2, 0.50
 def load_h4(path):
     return [bt.Bar(datetime.fromisoformat(c["fromDate"].replace("Z", "+00:00")), c["open"], c["high"], c["low"],
                    c["close"]) for c in json.load(open(path))]
-
-
-def to_daily(h4):
-    days = OrderedDict()
-    for b in h4:
-        days.setdefault(b.start.date(), []).append(b)
-    return [bt.Bar(datetime(d.year, d.month, d.day, tzinfo=bs[0].start.tzinfo), bs[0].open,
-                   max(x.high for x in bs), min(x.low for x in bs), bs[-1].close) for d, bs in days.items()]
 
 
 # ---------- dagsstrategier (hela kapitalet in eller ut) ----------
@@ -88,43 +81,6 @@ def run_daily(daily, sig, a, b):
         trades.append({"in": entry_i, "out": b - 1, "ret": daily[b - 1].close / entry_px - 1, "days": b - 1 - entry_i,
                        "open": True})
     return eq, trades, costs, 0.0
-
-
-# ---------- gld-v1.1 ----------
-def run_v11(daily, h4, t0, t1):
-    tr = bt.run(daily, h4)
-    tr = [t for t in tr if t0 <= t["entry_t"] and t["exit_t"] < t1]
-    dates = [d.start for d in daily if t0 <= d.start < t1]
-    closes = {d.start.date(): d.close for d in daily}
-    equity, done, skipped, costs, overnight = START, [], 0, 0.0, 0.0
-    marks = {}  # datum -> kapital
-    ti = 0
-    for t in tr:
-        f = RISK * t["entry"] / t["r"]  # exponering som andel av kapitalet
-        if f > MAX_EXPO:
-            skipped += 1
-            continue
-        expo = f * equity
-        n = bt.nights(t["entry_t"], t["exit_t"])
-        c = expo * (2 * FEE + SPREAD)
-        o = expo * ON_X2_LONG * n if t["dir"] == 1 else 0.0
-        pnl = expo * t["dir"] * (t["exit"] / t["entry"] - 1)
-        # markera kapitalet dag för dag under affären
-        d = t["entry_t"].date()
-        while d <= t["exit_t"].date():
-            if d in closes:
-                marks[d] = equity + expo * t["dir"] * (closes[d] / t["entry"] - 1) - expo * FEE
-            d += timedelta(days=1)
-        equity += pnl - c - o
-        marks[t["exit_t"].date()] = equity
-        costs, overnight = costs + c, overnight + o
-        done.append({"in_t": t["entry_t"], "out_t": t["exit_t"], "ret": pnl - c - o, "gross": pnl,
-                     "days": (t["exit_t"] - t["entry_t"]).total_seconds() / 86400, "f": f})
-    eq, last = [], START
-    for d in dates:
-        last = marks.get(d.date(), last)
-        eq.append(last)
-    return eq, done, costs, overnight, skipped
 
 
 # ---------- mått ----------
@@ -179,79 +135,134 @@ def runs(sig, a, b):
     return out
 
 
-def main():
-    h4 = load_h4(sys.argv[1])
-    t_from = datetime.fromisoformat((sys.argv[2] if len(sys.argv) > 2 else "2016-09-01") + "T00:00:00+00:00")
-    daily = to_daily(h4)
-    a = next(i for i, d in enumerate(daily) if d.start >= t_from)
-    b = len(daily)
-    dates = [d.start for d in daily[a:b]]
-    print(f"Period {dates[0].date()} -> {dates[-1].date()} ({(dates[-1] - dates[0]).days / 365.25:.1f} år), "
-          f"{b - a} handelsdagar. GLD: {daily[a].open:.2f} -> {daily[b - 1].close:.2f}\n")
+def load_d1(path):
+    """eToros egna dagsstaplar (starttid 21:00 UTC dagen före handelsdagen)."""
+    return [bt.Bar(datetime.fromisoformat(c["fromDate"].replace("Z", "+00:00")), c["open"], c["high"], c["low"],
+                   c["close"]) for c in json.load(open(path))]
 
-    res = OrderedDict()
-    bh = [1] * len(daily)
-    for name, sig in (("Köp och behåll x1", bh), ("SMA200 x1", sma_signals(daily, 0)),
-                      ("SMA200 ±2 % x1", sma_signals(daily, BUF))):
-        eq, tr, costs, on = run_daily(daily, sig, a, b)
-        inv = sum(1 for i in range(a, b) if (sig[i - 1] if i > 0 else None) == 1) / (b - a)
-        res[name] = (eq, tr, costs, on, inv, sig, None)
-    eq, tr, costs, on, skipped = run_v11(daily, h4, dates[0], dates[-1] + timedelta(days=1))
-    held = sum(t["days"] for t in tr) / ((dates[-1] - dates[0]).days or 1)
-    res["gld-v1.1 (0,5 %, x2)"] = (eq, tr, costs, on, held, None, skipped)
 
-    hdr = f"{'':28}" + "".join(f"{n:>22}" for n in res)
-    print(hdr)
+def table(res, dates, daily, a, b):
     rows = OrderedDict()
     for n, (eq, tr, costs, on, inv, sig, sk) in res.items():
         m = metrics(eq, dates)
-        rets = [t["ret"] for t in tr]
         rows[n] = m | {"trades": len(tr), "hold": (sum(t["days"] for t in tr) / len(tr)) if tr else 0,
-                       "inv": inv, "streak": streak(rets), "costs": costs, "on": on,
+                       "inv": inv, "streak": streak([t["ret"] for t in tr]), "costs": costs, "on": on,
                        "gross_total": (eq[-1] + costs + on) / START - 1, "skipped": sk}
+    print(f"{'':28}" + "".join(f"{n:>22}" for n in rows))
 
     def line(label, f):
         print(f"{label:28}" + "".join(f"{f(r):>22}" for r in rows.values()))
-    line("Total avkastning", lambda r: f"{r['total']:+.0%}")
-    line("  före kostnader (ca)", lambda r: f"{r['gross_total']:+.0%}")
+    line("Total avkastning", lambda r: f"{r['total']:+.1%}")
+    line("  före kostnader (ca)", lambda r: f"{r['gross_total']:+.1%}")
     line("Per år (CAGR)", lambda r: f"{r['cagr']:+.1%}")
     line("Största ras", lambda r: f"{r['maxdd']:.1%}")
     line("Calmar", lambda r: f"{r['calmar']:.2f}")
     line("Sharpe", lambda r: f"{r['sharpe']:.2f}")
     line("Sortino", lambda r: f"{r['sortino']:.2f}")
     line("Antal affärer", lambda r: f"{r['trades']}")
-    line("Snittid per affär (dagar)", lambda r: f"{r['hold']:.0f}")
+    line("Snittid per affär (dagar)", lambda r: f"{r['hold']:.1f}")
     line("Tid investerad", lambda r: f"{r['inv']:.0%}")
     line("Längsta förlustsvit", lambda r: f"{r['streak']}")
-    line("Avgifter+spread (USD)", lambda r: f"{r['costs']:.0f}")
-    line("Nattavgifter (USD)", lambda r: f"{r['on']:.0f}")
-    line("Värsta kvartal", lambda r: f"{r['worst_q'][0][0]} Q{r['worst_q'][0][1]} {r['worst_q'][1]:+.0%}")
+    line("Avgifter+spread (USD)", lambda r: f"{r['costs']:.1f}")
+    line("Nattavgifter (USD)", lambda r: f"{r['on']:.1f}")
+    line("Värsta kvartal", lambda r: f"{r['worst_q'][0][0]} Q{r['worst_q'][0][1]} {r['worst_q'][1]:+.1%}")
     line("Hoppade över (tak)", lambda r: "-" if r["skipped"] is None else f"{r['skipped']}")
-    print("\nPer kalenderår")
+    print("Per kalenderår")
     for y in rows[next(iter(rows))]["years"]:
         line(f"  {y}", lambda r: f"{r['years'].get(y, float('nan')):+.1%}")
 
-    # GLD självt per år (referens) och SMA-detaljer
+
+def daily_strats(daily, a, b):
+    res = OrderedDict()
+    for name, sig in (("Köp och behåll x1", [1] * len(daily)), ("SMA200 x1", sma_signals(daily, 0)),
+                      ("SMA200 ±2 % x1", sma_signals(daily, BUF))):
+        eq, tr, costs, on = run_daily(daily, sig, a, b)
+        inv = sum(1 for i in range(a, b) if sig[i - 1] == 1) / (b - a)
+        res[name] = (eq, tr, costs, on, inv, sig, None)
+    return res
+
+
+def sma_details(res, daily, a, b):
     for n in ("SMA200 x1", "SMA200 ±2 % x1"):
-        sig = res[n][5]
-        tr = res[n][1]
+        _, tr, _, _, _, sig, _ = res[n]
         r = runs(sig, a, b)
         whip = [t for t in tr if t["days"] <= 20 and t["ret"] < 0]
         cross = sum(1 for i in range(a + 1, b) if sig[i] != sig[i - 1])
         long_ret = math.prod(1 + t["ret"] for t in tr) - 1
-        # GLD-avkastning under perioder utanför marknaden
-        flat_ret, i = 1.0, a
+        flat_ret = 1.0
         for i in range(a + 1, b):
             if sig[i - 1] == 0:
                 flat_ret *= daily[i].close / daily[i - 1].close
         print(f"\n{n}: {cross} korsningar, {len(tr)} affärer, {len(whip)} whipsaws "
               f"(förlust inom 20 dagar, sammanlagt {sum(t['ret'] for t in whip):+.1%}), "
-              f"snitt {sum(r[1]) / len(r[1]):.0f} dagar investerad per period, "
-              f"{sum(r[0]) / len(r[0]):.0f} dagar ute per period.")
-        print(f"  GLD när strategin var inne: {long_ret:+.0%} sammanlagt; "
-              f"GLD när strategin var ute: {flat_ret - 1:+.0%} (det den missade eller slapp).")
+              f"snitt {sum(r[1]) / len(r[1]):.0f} dagar per period över snittet, "
+              f"{(sum(r[0]) / len(r[0])) if r[0] else 0:.0f} dagar per period under.")
+        print(f"  GLD när strategin var inne: {long_ret:+.0%}; GLD när strategin var ute: {flat_ret - 1:+.0%}.")
         print("  Affärer:", ", ".join(f"{daily[t['in']].start.date()}→{daily[t['out']].start.date()} {t['ret']:+.0%}"
                                       for t in tr))
+
+
+def main():
+    """compare <h4_full.json> <d1_full.json> <v11_från, t.ex. 2026-05-11>"""
+    h4, d1 = load_h4(sys.argv[1]), load_d1(sys.argv[2])
+    v11_from = datetime.fromisoformat(sys.argv[3] + "T00:00:00+00:00")
+
+    # A. Dagsstrategier på eToros egna dagsdata, från första dagen SMA200 finns.
+    a, b = 200, len(d1)
+    dates = [d.start for d in d1[a:b]]
+    print(f"A. DAGSSTRATEGIER: native 1D, {dates[0].date()} -> {dates[-1].date()} "
+          f"({(dates[-1] - dates[0]).days / 365.25:.1f} år, {b - a} staplar). GLD {d1[a].open:.2f} -> {d1[b - 1].close:.2f}\n")
+    res = daily_strats(d1, a, b)
+    table(res, dates, d1, a, b)
+    sma_details(res, d1, a, b)
+
+    # B. Alla fyra på perioden där 4H har live-struktur (24/5). gld-v1.1: regim från native 1D, signaler från 4H.
+    a2 = next(i for i, d in enumerate(d1) if d.start >= v11_from - timedelta(hours=3))
+    dates2 = [d.start for d in d1[a2:b]]
+    print(f"\n\nB. LIVE-KOMPATIBEL PERIOD: {dates2[0].date()} -> {dates2[-1].date()} "
+          f"({(dates2[-1] - dates2[0]).days} dagar). 4H med 24/5-struktur sedan vecka 2026-W18, "
+          f"+ uppvärmning för 4H-MA50. GLD {d1[a2].open:.2f} -> {d1[b - 1].close:.2f}\n")
+    res2 = daily_strats(d1, a2, b)
+    eq, tr, costs, on, skipped = run_v11_native(d1, h4, dates2, v11_from)
+    held = sum(t["days"] for t in tr) / ((dates2[-1] - dates2[0]).days or 1)
+    res2["gld-v1.1 (0,5 %, x2)"] = (eq, tr, costs, on, held, None, skipped)
+    table(res2, dates2, d1, a2, b)
+    print("\ngld-v1.1-affärer:")
+    for t in tr:
+        print(f"  {t['in_t']:%Y-%m-%d %H} -> {t['out_t']:%Y-%m-%d %H}  {t['side']:5} exponering {t['f']:.0%}  "
+              f"netto {t['ret']:+.2f} USD  ({t['why']})")
+
+
+def run_v11_native(d1, h4, dates, t0):
+    """gld-v1.1 med regim från native dagsstaplar (slutar 21:00 UTC) och 4H-signaler."""
+    daily = [bt.Bar(d.start + timedelta(hours=3), d.open, d.high, d.low, d.close) for d in d1]  # 21:00 -> 00:00 nästa dag
+    trades = [t for t in bt.run(daily, h4) if t["entry_t"] >= t0]
+    closes = {(d.start + timedelta(hours=3)).date(): d.close for d in d1}
+    equity, done, skipped, costs, overnight, marks = START, [], 0, 0.0, 0.0, {}
+    for t in trades:
+        f = RISK * t["entry"] / t["r"]
+        if f > MAX_EXPO:
+            skipped += 1
+            continue
+        expo = f * equity
+        c = expo * (2 * FEE + SPREAD)
+        o = expo * ON_X2_LONG * bt.nights(t["entry_t"], t["exit_t"]) if t["dir"] == 1 else 0.0
+        pnl = expo * t["dir"] * (t["exit"] / t["entry"] - 1)
+        d = t["entry_t"].date()
+        while d <= t["exit_t"].date():
+            if d in closes:
+                marks[d] = equity + expo * t["dir"] * (closes[d] / t["entry"] - 1) - expo * FEE
+            d += timedelta(days=1)
+        equity += pnl - c - o
+        marks[t["exit_t"].date()] = equity
+        costs, overnight = costs + c, overnight + o
+        done.append({"in_t": t["entry_t"], "out_t": t["exit_t"], "ret": pnl - c - o, "side": t["side"], "f": f,
+                     "why": t["why"], "days": (t["exit_t"] - t["entry_t"]).total_seconds() / 86400})
+    eq, last = [], START
+    for d in dates:
+        last = marks.get((d + timedelta(hours=3)).date(), last)
+        eq.append(last)
+    return eq, done, costs, overnight, skipped
 
 
 if __name__ == "__main__":

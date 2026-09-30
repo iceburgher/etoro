@@ -1,0 +1,78 @@
+A. DAGSSTRATEGIER: native 1D, 2019-05-28 -> 2026-09-27 (7.3 år, 1800 staplar). GLD 121.01 -> 377.16
+
+                                 Köp och behåll x1             SMA200 x1        SMA200 ±2 % x1
+Total avkastning                           +212.5%               +119.8%               +140.3%
+  före kostnader (ca)                      +211.3%               +130.3%               +143.2%
+Per år (CAGR)                               +16.8%                +11.3%                +12.7%
+Största ras                                 -26.3%                -31.3%                -26.5%
+Calmar                                        0.64                  0.36                  0.48
+Sharpe                                        0.96                  0.76                  0.82
+Sortino                                       1.37                  1.06                  1.16
+Antal affärer                                    1                    31                     6
+Snittid per affär (dagar)                   1799.0                  44.2                 235.3
+Tid investerad                                100%                   76%                   78%
+Längsta förlustsvit                              0                     7                     2
+Avgifter+spread (USD)                          1.6                 114.0                  29.5
+Nattavgifter (USD)                             0.0                   0.0                   0.0
+Värsta kvartal                      2026 Q2 -15.5%         2022 Q2 -9.9%        2026 Q2 -10.8%
+Hoppade över (tak)                               -                     -                     -
+Per kalenderår
+  2019                                      +18.3%                +18.3%                +15.0%
+  2020                                      +24.8%                +10.8%                +24.8%
+  2021                                       -4.2%                -13.5%                -13.7%
+  2022                                       -0.8%                -10.4%                 -2.4%
+  2023                                      +12.7%                 +5.6%                 +4.3%
+  2024                                      +26.7%                +26.7%                +26.7%
+  2025                                      +63.7%                +63.7%                +63.7%
+  2026                                       -4.7%                 -1.1%                 -8.1%
+
+SMA200 x1: 61 korsningar, 31 affärer, 20 whipsaws (förlust inom 20 dagar, sammanlagt -18.2%), snitt 44 dagar per period över snittet, 14 dagar per period under.
+  GLD när strategin var inne: +141%; GLD när strategin var ute: +27%.
+  Affärer: 2019-05-28→2020-03-19 +16%, 2020-03-23→2020-11-29 +8%, 2020-12-01→2021-01-18 +1%, 2021-01-19→2021-01-27 -0%, 2021-02-01→2021-02-02 -0%, 2021-05-17→2021-06-16 -5%, 2021-07-29→2021-08-01 -1%, 2021-08-29→2021-08-30 -0%, 2021-09-06→2021-09-07 -1%, 2021-10-25→2021-10-26 -0%, 2021-10-28→2021-10-31 +1%, 2021-11-07→2021-11-23 -2%, 2021-12-16→2021-12-20 -1%, 2021-12-22→2022-01-06 -1%, 2022-01-10→2022-01-27 -1%, 2022-02-06→2022-05-10 +2%, 2022-05-11→2022-05-12 -2%, 2022-05-19→2022-05-31 +0%, 2022-06-01→2022-06-13 -2%, 2022-06-16→2022-06-20 -1%, 2022-12-01→2022-12-04 +0%, 2022-12-13→2022-12-15 -1%, 2022-12-20→2022-12-22 -1%, 2022-12-26→2023-08-16 +5%, 2023-08-23→2023-09-12 -0%, 2023-09-17→2023-09-21 -0%, 2023-09-24→2023-09-25 -1%, 2023-10-15→2023-10-16 +0%, 2023-10-18→2023-11-12 -1%, 2023-11-13→2026-06-07 +120%, 2026-08-19→2026-08-30 -1%
+
+SMA200 ±2 % x1: 12 korsningar, 6 affärer, 2 whipsaws (förlust inom 20 dagar, sammanlagt -13.3%), snitt 235 dagar per period över snittet, 55 dagar per period under.
+  GLD när strategin var inne: +145%; GLD när strategin var ute: +21%.
+  Affärer: 2019-06-02→2021-02-04 +36%, 2021-05-25→2021-06-17 -7%, 2021-11-09→2022-06-30 -4%, 2023-01-03→2023-09-27 +1%, 2023-10-19→2026-06-09 +113%, 2026-08-23→2026-09-01 -6%
+
+
+B. LIVE-KOMPATIBEL PERIOD: 2026-05-10 -> 2026-09-27 (140 dagar). 4H med 24/5-struktur sedan vecka 2026-W18, + uppvärmning för 4H-MA50. GLD 430.34 -> 377.16
+
+                                 Köp och behåll x1             SMA200 x1        SMA200 ±2 % x1  gld-v1.1 (0,5 %, x2)
+Total avkastning                            -13.2%                -10.0%                -16.3%                 +0.2%
+  före kostnader (ca)                       -12.3%                 -8.6%                -15.0%                 +1.6%
+Per år (CAGR)                               -30.9%                -24.0%                -37.2%                 +0.5%
+Största ras                                 -16.1%                -10.0%                -16.3%                 -2.8%
+Calmar                                       -1.92                 -2.40                 -2.28                  0.18
+Sharpe                                       -1.33                 -2.39                 -4.00                  0.16
+Sortino                                      -1.74                 -2.67                 -4.07                  0.26
+Antal affärer                                    1                     2                     2                    19
+Snittid per affär (dagar)                     98.0                  13.0                  14.0                   2.6
+Tid investerad                                100%                   26%                   28%                   35%
+Längsta förlustsvit                              1                     2                     2                     8
+Avgifter+spread (USD)                          1.6                   5.9                   5.8                  13.3
+Nattavgifter (USD)                             0.0                   0.0                   0.0                   0.6
+Värsta kvartal                      2026 Q2 -15.0%         2026 Q2 -8.4%        2026 Q2 -10.2%         2026 Q3 -2.2%
+Hoppade över (tak)                               -                     -                     -                     0
+Per kalenderår
+  2026                                      -13.2%                -10.0%                -16.3%                 +0.2%
+
+gld-v1.1-affärer:
+  2026-05-21 08 -> 2026-05-27 12  SHORT exponering 40%  netto +8.76 USD  (target)
+  2026-06-01 16 -> 2026-06-02 04  SHORT exponering 17%  netto -1.47 USD  (4h_close_above_ma50)
+  2026-06-02 20 -> 2026-06-04 12  SHORT exponering 36%  netto -3.12 USD  (4h_close_above_ma50)
+  2026-06-05 00 -> 2026-06-05 12  SHORT exponering 36%  netto +8.91 USD  (target)
+  2026-06-08 00 -> 2026-06-10 20  SHORT exponering 15%  netto +9.68 USD  (target)
+  2026-06-17 20 -> 2026-06-18 00  SHORT exponering 14%  netto -2.30 USD  (4h_close_above_ma50)
+  2026-06-18 12 -> 2026-06-25 08  SHORT exponering 14%  netto +9.76 USD  (target)
+  2026-06-30 04 -> 2026-07-01 12  SHORT exponering 17%  netto -5.69 USD  (stop)
+  2026-07-08 12 -> 2026-07-08 20  SHORT exponering 16%  netto -1.30 USD  (4h_close_above_ma50)
+  2026-07-09 04 -> 2026-07-09 08  SHORT exponering 25%  netto -3.48 USD  (4h_close_above_ma50)
+  2026-07-13 04 -> 2026-07-21 04  SHORT exponering 24%  netto +0.04 USD  (4h_close_above_ma50)
+  2026-07-24 04 -> 2026-07-24 12  SHORT exponering 17%  netto -1.75 USD  (4h_close_above_ma50)
+  2026-07-28 04 -> 2026-07-30 00  SHORT exponering 27%  netto -2.93 USD  (4h_close_above_ma50)
+  2026-07-30 08 -> 2026-07-30 12  SHORT exponering 25%  netto -2.79 USD  (4h_close_above_ma50)
+  2026-07-31 12 -> 2026-08-04 08  SHORT exponering 27%  netto -1.92 USD  (4h_close_above_ma50)
+  2026-08-19 16 -> 2026-08-28 16  LONG  exponering 12%  netto -0.03 USD  (4h_close_below_ma50)
+  2026-09-17 16 -> 2026-09-17 20  LONG  exponering 15%  netto -1.29 USD  (4h_close_below_ma50)
+  2026-09-18 04 -> 2026-09-22 08  LONG  exponering 22%  netto -3.60 USD  (4h_close_below_ma50)
+  2026-09-22 20 -> 2026-09-23 08  LONG  exponering 27%  netto -3.60 USD  (4h_close_below_ma50)
