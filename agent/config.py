@@ -20,11 +20,17 @@ class Config:
     leverage: int = 2
     # eToros minsta exponering (insats x hävstång) för GLD CFD
     min_exposure_usd: float = 10.0
-    # Tak på insats per affär. 40 USD x2 = 80 USD exponering; stop loss -3 % = ca 2,40 USD = ca 0,25 % av kontot
-    max_trade_usd: float = 40.0
-    # Agentportföljen har ~1000 USD, men API:et rapporterar credit 10000. Tills det är utrett räknas
-    # kontot som högst så här stort, så att alla %-regler blir rätt.
-    equity_cap_usd: float = 1000.0
+    # Valutor. Agentportföljen = virtuellt saldo i USD (eToro: agentPortfolioVirtualBalance = 10 000 USD).
+    # Din kopia = eget belopp i USD som visas i SEK i appen (SEK 9 983,59 ≈ 1 000 USD).
+    agent_virtual_balance_usd: float = 10000.0   # kontrolleras mot API:et varje varv
+    copy_investment_usd: float = 1000.0          # ditt kopieringsbelopp
+    portfolio_display_currency: str = "SEK"
+    instrument_currency: str = "USD"
+    risk_per_trade: float = 0.0025
+    fx_instrument: int = 58                      # USDSEK hos eToro
+    fx_max_age_s: int = 300
+    # Riktiga ÖPPNINGAR är spärrade tills valutamodellen är verifierad, även med LIVE=yes
+    real_open_enabled: bool = False
     # Strategi
     fast_ma: int = 20
     slow_ma: int = 50

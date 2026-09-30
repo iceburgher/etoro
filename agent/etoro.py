@@ -43,6 +43,10 @@ class Etoro:
         # pnl-varianten har unrealizedPnL, annars ser dagliga förlustspärren inga orealiserade förluster
         return self._req("GET", "/api/v1/trading/info/real/pnl")
 
+    def quote(self, instrument_id: int) -> dict:
+        r = self._req("GET", "/api/v2/market-data/rates", params={"instrumentIds": str(instrument_id)})["results"][0]
+        return r
+
     def allowed_long(self, instrument_id: int) -> set[tuple[str, int]]:
         """(settlementType, hävstång) som kontot får öppna long i instrumentet."""
         d = self._req("POST", "/api/v2/trading/info/eligibility", json={"instrumentIds": [instrument_id]})

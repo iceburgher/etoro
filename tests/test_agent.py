@@ -49,3 +49,29 @@ def test_account_numbers_includes_pnl_and_held():
     pf = {"clientPortfolio": {"credit": 800, "unrealizedPnL": -30,
                               "positions": [{"instrumentID": 3025, "amount": 200}], "ordersForOpen": []}}
     assert account_numbers(pf) == (970, 200, {3025})
+
+
+def _size(**kw):
+    from agent import sizing
+    base = dict(agent_equity_usd=10000, copy_investment_usd=1000, price_usd=381.47, stop_usd=370.03, leverage=2,
+                usdsek_rate=9.9845, fx_timestamp="t", fx_source="test", risk_pct=0.0025)
+    return sizing.size_trade(**{**base, **kw})
+
+
+def test_sizing_within_budget_both_currencies():
+    s = _size()
+    assert s.within_budget
+    assert s.expected_loss_at_stop_usd <= s.risk_budget_usd
+    assert s.expected_loss_at_stop_sek <= s.risk_budget_sek
+    assert s.copy_ratio == 0.1
+
+
+def test_sizing_rounds_units_down():
+    s = _size(stop_usd=381.47 - 7.0)  # 25 / 7 = 3.5714 -> 3.57
+    assert s.units == 3.57
+
+
+def test_sizing_rejects_zero_stop_distance():
+    import pytest
+    with pytest.raises(ValueError):
+        _size(stop_usd=381.47)

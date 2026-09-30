@@ -1,9 +1,10 @@
 import argparse
 import datetime as dt
 import json
+import math
 import time
 
-from . import ai_filter, risk, strategy
+from . import ai_filter, risk, sizing, strategy
 from .config import Config
 from .etoro import Etoro
 
@@ -31,9 +32,8 @@ def step(cfg: Config, api: Etoro, st: risk.State | None):
     today = dt.date.today().isoformat()
     pf = api.portfolio()
     equity, invested, held = account_numbers(pf)
-    if equity > cfg.equity_cap_usd:
-        log(event="warning", reason="API-saldot större än taket, använder taket", api_equity=equity, cap=cfg.equity_cap_usd)
-        equity = cfg.equity_cap_usd
+    if abs(equity - cfg.agent_virtual_balance_usd) > 0.5 * cfg.agent_virtual_balance_usd:
+        log(event="warning", reason="agentsaldo skiljer mycket från förväntat", agent_equity_usd=equity)
     if equity <= 0:
         log(event="stop", reason="kunde inte läsa kontovärde", raw_keys=list(pf)[:10])
         return st
@@ -49,7 +49,23 @@ def step(cfg: Config, api: Etoro, st: risk.State | None):
         if iid in held:  # annars köper den igen var 15:e minut så länge signalen står kvar
             log(event="blocked", instrument=iid, reason="har redan position")
             continue
-        amount = round(min(equity * cfg.max_per_trade_pct, cfg.max_trade_usd), 2)
+        px = closes[-1]
+        sl, tp = px * (1 - cfg.stop_loss_pct), px * (1 + cfg.take_profit_pct)
+        fx = api.quote(cfg.fx_instrument)
+        fx_time = dt.datetime.fromisoformat(fx["date"]).replace(tzinfo=dt.timezone.utc)
+        fx_age = (dt.datetime.now(dt.timezone.utc) - fx_time).total_seconds()
+        if fx.get("quoteType") != "realtime" or fx_age > cfg.fx_max_age_s:
+            log(event="blocked", instrument=iid, reason="USDSEK saknas eller är gammal", fx=fx)
+            continue
+        sz = sizing.size_trade(agent_equity_usd=equity, copy_investment_usd=cfg.copy_investment_usd,
+                               price_usd=px, stop_usd=sl, leverage=cfg.leverage,
+                               usdsek_rate=(fx["bid"] + fx["ask"]) / 2, fx_timestamp=fx["date"],
+                               fx_source="eToro rates, instrument 58 USDSEK", risk_pct=cfg.risk_per_trade)
+        log(event="sizing", instrument=iid, **sz.__dict__)
+        if not sz.within_budget:
+            log(event="blocked", instrument=iid, reason="förväntad förlust över riskbudget")
+            continue
+        amount = math.floor(sz.margin_required_usd * 100) / 100  # insats i USD, nedåt till hela cent
         ok, why = risk.check_buy(cfg, st, iid, equity, invested, amount)
         if not ok:
             log(event="blocked", instrument=iid, reason=why)
@@ -60,11 +76,12 @@ def step(cfg: Config, api: Etoro, st: risk.State | None):
         if cfg.use_ai_filter and not ai_filter.approve(cfg.ai_model, str(iid), closes, []):
             log(event="ai_veto", instrument=iid)
             continue
-        px = closes[-1]
-        sl, tp = px * (1 - cfg.stop_loss_pct), px * (1 + cfg.take_profit_pct)
         if not cfg.live:
             log(event="DRY_RUN_buy", instrument=iid, amount=amount, leverage=cfg.leverage,
                 exposure=amount * cfg.leverage, sl=round(sl, 2), tp=round(tp, 2))
+            continue
+        if not cfg.real_open_enabled:
+            log(event="blocked", instrument=iid, reason="riktiga öppningar spärrade tills valutamodellen är verifierad")
             continue
         res = api.open_buy(iid, amount, sl, tp, cfg.settlement_type, cfg.leverage)
         st.orders_today += 1
