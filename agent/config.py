@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 class Config:
     base_url: str = "https://public-api.etoro.com"
     # Bara dessa instrument får handlas. Allt annat blockeras.
-    allowed_instruments: tuple = (18,)  # 18 = GOLD (CFD, den du handlar i appen). 3025 = GLD (guld-ETF)
+    allowed_instruments: tuple = (3025,)  # 3025 = GLD som CFD (min 10 USD). 18 = GOLD (min 1000 USD exponering)
     # Risk (i USD / procent)
     max_per_trade_pct: float = 0.20      # max andel av kontot per trade
     max_total_exposure_pct: float = 0.40  # max andel av kontot investerat totalt
@@ -18,10 +18,10 @@ class Config:
     settlement_type: str = "cfd"
     # Hävstång: 2 = exponering 2x insatsen. Stop loss 3 % i pris = 6 % av insatsen vid x2.
     leverage: int = 2
-    # eToros minsta exponering (insats x hävstång) för GOLD CFD
-    min_exposure_usd: float = 1000.0
-    # Hårt tak på insats per affär i USD, oavsett vad kontosaldot säger (kontot är ~10 000 SEK ≈ 1 000 USD)
-    max_trade_usd: float = 200.0
+    # eToros minsta exponering (insats x hävstång) för GLD CFD
+    min_exposure_usd: float = 10.0
+    # Tak på insats per affär. 40 USD x2 = 80 USD exponering; stop loss -3 % = ca 2,40 USD = ca 0,25 % av kontot
+    max_trade_usd: float = 40.0
     # Agentportföljen har ~1000 USD, men API:et rapporterar credit 10000. Tills det är utrett räknas
     # kontot som högst så här stort, så att alla %-regler blir rätt.
     equity_cap_usd: float = 1000.0
