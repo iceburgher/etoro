@@ -61,9 +61,15 @@ Efter integrationsaffären: `update control set halt_new_entries = false;` förs
   **Inte** kopplat till GitHub, så inget deployas automatiskt; produktion deployas bara med CLI från en tagg.
   Satta variabler: `EXECUTION_MODE=DRY_RUN`, `REAL_MICRO_INTEGRATION`, `EXPECTED_PORTFOLIO`,
   `ALLOCATED_CAPITAL_SEK`, `KILL_SWITCH`, `ALERT_EMAIL_TO`, `ALERT_EMAIL_FROM`, `RESEND_API_KEY`, `CRON_SECRET`.
-- **Kvar att lägga in själv (hemligheter):** `ETORO_USER_KEY`, `ETORO_API_KEY` och `DATABASE_URL`
-  (Supabase → Connect → Transaction pooler, port 6543, med databaslösenordet; lägg till `?sslmode=require`).
-  Sätt dem bara för Production.
+- **Hemligheter i Vercel (Production):** `ETORO_USER_KEY`, `ETORO_API_KEY`, `DATABASE_URL`
+  (rollen `guldagenten_app` via transaction pooler `aws-0-eu-north-1.pooler.supabase.com:6543`, se `sql/app_role.sql`).
+- **Deployat 30 sep:** `main` @ `fcf341b` (PR #1) till Production, `guldagenten.vercel.app`, DRY_RUN.
+  Vercel Authentication gäller bara Preview; Production skyddas av `CRON_SECRET`.
+- **Schema igång 30 sep:** Vault-hemligheter satta, `pg_cron`-jobben `guldagenten-monitor` och
+  `guldagenten-strategy` aktiva. Första anropet: 200, `no_action`, DRY_RUN, rätt SHA, data i databasen.
+  Torrkörningsperioden startade 30 sep.
+- **Tagg saknas:** `v1.1.0` kunde inte pushas från Claude-sessionen. Skapa den i GitHub på commit `fcf341b`
+  (Releases → Draft a new release → tag `v1.1.0`, target `main`).
 - **Vercel-plan:** Hobby. Därför schemaläggs jobben från Supabase (se ovan).
 - **Att bekräfta vid första deployen:** att Supabase-anropen kommer fram trots Vercel Authentication
   (deployment protection är på). Antingen skapa en "Protection Bypass for Automation"-token och lägg den i
