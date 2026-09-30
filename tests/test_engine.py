@@ -240,8 +240,8 @@ def test_order_sizes_to_risk_budget_in_sek():
     eng, b, s, c, logs = make()
     open_long(eng, b, s)
     sz = events(logs, "order_submitted")[0]["sizing"]
-    assert sz["expected_loss_at_stop_sek"] <= sz["risk_budget_sek"] <= 25.0
-    assert abs(sz["risk_budget_sek"] - 24.96) < 0.01
+    assert sz["expected_loss_at_stop_sek"] <= sz["risk_budget_sek"] <= 50.0
+    assert abs(sz["risk_budget_sek"] - 49.92) < 0.01
     assert sz["units"] == b.opened[0]["units"]
     assert all(l.get("git_sha") == "testsha" for l in events(logs, "order_submitted"))
 
