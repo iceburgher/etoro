@@ -27,25 +27,25 @@ def test_blocks_other_instrument():
 
 
 def test_blocks_oversize_trade():
-    assert not risk.check_buy(cfg, st(), 3025, 1000, 0, 500)[0]
+    assert not risk.check_buy(cfg, st(), 18, 1000, 0, 500)[0]
 
 
 def test_blocks_total_exposure():
-    assert not risk.check_buy(cfg, st(), 3025, 1000, 350, 100)[0]
+    assert not risk.check_buy(cfg, st(), 18, 1000, 350, 100)[0]
 
 
 def test_daily_loss_halts():
     s = st()
-    assert not risk.check_buy(cfg, s, 3025, 960, 0, 100)[0]
+    assert not risk.check_buy(cfg, s, 18, 960, 0, 100)[0]
     assert s.halted
 
 
 def test_ok_trade():
-    assert risk.check_buy(cfg, st(), 3025, 1000, 0, 100)[0]
+    assert risk.check_buy(cfg, st(), 18, 1000, 0, 100)[0]
 
 
 def test_account_numbers_includes_pnl_and_held():
     from agent.main import account_numbers
     pf = {"clientPortfolio": {"credit": 800, "unrealizedPnL": -30,
-                              "positions": [{"instrumentID": 3025, "amount": 200}], "ordersForOpen": []}}
-    assert account_numbers(pf) == (970, 200, {3025})
+                              "positions": [{"instrumentID": 18, "amount": 200}], "ordersForOpen": []}}
+    assert account_numbers(pf) == (970, 200, {18})

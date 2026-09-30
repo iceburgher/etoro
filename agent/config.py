@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 class Config:
     base_url: str = "https://public-api.etoro.com"
     # Bara dessa instrument får handlas. Allt annat blockeras.
-    allowed_instruments: tuple = (3025,)  # 3025 = GLD (guld-ETF). 18 = GOLD (CFD), 4365 = IAU
+    allowed_instruments: tuple = (18,)  # 18 = GOLD (CFD, den du handlar i appen). 3025 = GLD (guld-ETF)
     # Risk (i USD / procent)
     max_per_trade_pct: float = 0.20      # max andel av kontot per trade
     max_total_exposure_pct: float = 0.40  # max andel av kontot investerat totalt
@@ -15,7 +15,7 @@ class Config:
     daily_loss_halt_pct: float = 0.03    # pausa resten av dagen vid -3 %
     max_orders_per_day: int = 4
     # "real" = äg riktiga andelar. "cfd" = derivat med nattavgifter. Väljs medvetet, aldrig automatiskt.
-    settlement_type: str = "real"
+    settlement_type: str = "cfd"
     # Strategi
     fast_ma: int = 20
     slow_ma: int = 50
