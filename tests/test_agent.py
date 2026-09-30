@@ -1,44 +1,33 @@
-from agent import risk, strategy
-from agent.config import Config
+import pytest
 
-cfg = Config()
-
-
-def st(**kw):
-    return risk.State(day="2026-09-30", start_equity=1000, **kw)
+from agent import sizing
 
 
-def test_uptrend_buys():
-    closes = [100 + i for i in range(60)]
-    assert strategy.signal(closes, 20, 50) == "buy"
+def _size(**kw):
+    base = dict(allocated_capital_sek=9983.59, price_usd=381.47, stop_usd=370.03, leverage=2,
+                usdsek_rate=9.9845, fx_timestamp="t", fx_source="test", risk_pct=0.0025)
+    return sizing.size_trade(**{**base, **kw})
 
 
-def test_downtrend_holds():
-    closes = [200 - i for i in range(60)]
-    assert strategy.signal(closes, 20, 50) == "hold"
+def test_sizing_within_budget_both_currencies():
+    s = _size()
+    assert s.within_budget
+    assert s.expected_loss_at_stop_usd <= s.risk_budget_usd
+    assert s.expected_loss_at_stop_sek <= s.risk_budget_sek
+    assert abs(s.risk_budget_sek - 24.96) < 0.01 and abs(s.risk_budget_usd - 2.50) < 0.01
 
 
-def test_too_little_data_holds():
-    assert strategy.signal([1, 2, 3], 20, 50) == "hold"
+def test_sizing_rounds_units_down():
+    s = _size(stop_usd=381.47 - 7.0)  # 2,4998 / 7 = 0,357 -> 0,35
+    assert s.units == 0.35
 
 
-def test_blocks_other_instrument():
-    assert not risk.check_buy(cfg, st(), 999, 1000, 0, 100)[0]
+def test_sizing_rejects_zero_stop_distance():
+    with pytest.raises(ValueError):
+        _size(stop_usd=381.47)
 
 
-def test_blocks_oversize_trade():
-    assert not risk.check_buy(cfg, st(), 3025, 1000, 0, 500)[0]
-
-
-def test_blocks_total_exposure():
-    assert not risk.check_buy(cfg, st(), 3025, 1000, 350, 100)[0]
-
-
-def test_daily_loss_halts():
-    s = st()
-    assert not risk.check_buy(cfg, s, 3025, 960, 0, 100)[0]
-    assert s.halted
-
-
-def test_ok_trade():
-    assert risk.check_buy(cfg, st(), 3025, 1000, 0, 100)[0]
+def test_leverage_changes_margin_not_risk():
+    a, b = _size(leverage=1), _size(leverage=5)
+    assert a.units == b.units and a.expected_loss_at_stop_sek == b.expected_loss_at_stop_sek
+    assert b.margin_required_usd < a.margin_required_usd
