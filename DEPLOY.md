@@ -20,14 +20,19 @@ sql/schema.sql       databasschema
 research/backtest.py backtest
 ```
 
-## Cron (UTC)
+## Schemaläggning (UTC) – Supabase pg_cron, inte Vercel Cron
+
+Vercel Hobby tillåter bara dagliga cron-jobb, så jobben väcks från Supabase (`sql/schedule.sql`):
+`pg_cron` startar, `pg_net` anropar Vercel-funktionen med `Authorization: Bearer CRON_SECRET`.
 
 | Jobb | Schema | Varför |
 | --- | --- | --- |
 | `/api/strategy` | `2 0,4,8,12,16,20 * * *` | 2 min efter att en 4H-stapel stängt |
 | `/api/monitor` | `* * * * *` | stop/mål, väntande ordrar, nödlägen |
 
-Vercel kör cron bara mot **Production**-deployen. Cron varje minut kräver Vercel Pro.
+Hemligheterna (deploy-adress, CRON_SECRET, ev. bypass-token) ligger i Supabase Vault, inte i SQL-filen.
+Pausa allt: `update cron.job set active = false where jobname like 'guldagenten-%';`.
+Byts planen till Vercel Pro kan samma scheman flyttas till `vercel.json` (`crons`).
 
 ## Miljövariabler
 
@@ -59,8 +64,11 @@ Efter integrationsaffären: `update control set halt_new_entries = false;` förs
 - **Kvar att lägga in själv (hemligheter):** `ETORO_USER_KEY`, `ETORO_API_KEY` och `DATABASE_URL`
   (Supabase → Connect → Transaction pooler, port 6543, med databaslösenordet; lägg till `?sslmode=require`).
   Sätt dem bara för Production.
-- **Att bekräfta:** Vercel Pro (cron varje minut), och att cron når funktionerna trots Vercel Authentication
-  (deployment protection är på för projektet).
+- **Vercel-plan:** Hobby. Därför schemaläggs jobben från Supabase (se ovan).
+- **Att bekräfta vid första deployen:** att Supabase-anropen kommer fram trots Vercel Authentication
+  (deployment protection är på). Antingen skapa en "Protection Bypass for Automation"-token och lägg den i
+  Vault som `guldagenten_bypass`, eller stäng av skyddet för Production (funktionerna kräver ändå CRON_SECRET).
+- **Hobby-villkor:** Vercel Hobby är avsett för icke-kommersiellt personligt bruk.
 
 ## Deploy (aldrig från feature-gren)
 
@@ -69,9 +77,13 @@ Efter integrationsaffären: `update control set halt_new_entries = false;` förs
 2. Merga till `main`.
 3. Tagga: `git tag -a v1.1.0 -m "gld-v1.1" && git push origin v1.1.0`.
 4. Kör `sql/schema.sql` mot produktionsdatabasen (idempotent).
-5. Deploya exakt den taggade commiten till Production: `git checkout v1.1.0 && vercel deploy --prod`.
-   Kontrollera att `VERCEL_GIT_COMMIT_SHA` i loggarna = taggens SHA (sparas i `agent_state.git_sha`,
-   `order_intents.git_sha` och `events.git_sha`).
+5. Deploya exakt den taggade commiten till Production:
+   `git checkout v1.1.0 && vercel deploy --prod --env GIT_SHA=$(git rev-parse HEAD)`.
+   (Projektet är inte Git-kopplat, så Vercel sätter ingen commit-SHA själv; `GIT_SHA` gör det.)
+   Kontrollera att SHA:n i loggarna = taggens (sparas i `agent_state.git_sha`, `order_intents.git_sha`,
+   `events.git_sha`).
+5b. Första gången: lägg hemligheterna i Vault och kör `sql/schedule.sql` i Supabase. Kontrollera med
+   `select status_code, content from net._http_response order by created desc limit 5;` att svaren är 200.
 6. Starta i `EXECUTION_MODE=DRY_RUN` i minst 2 veckor och tills tillräckligt många signaler/livscykler
    har passerat. Inga strategiändringar under perioden.
 7. Integrationsaffär: sätt `EXECUTION_MODE=REAL_MICRO`, `REAL_MICRO_INTEGRATION=1`, deploya om samma tagg.

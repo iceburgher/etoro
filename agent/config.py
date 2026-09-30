@@ -16,7 +16,8 @@ class Config:
     mode: str = field(default_factory=lambda: _env("EXECUTION_MODE", "DRY_RUN"))
     # Vercel sätter VERCEL_ENV = production | preview | development. Tomt = lokalt.
     vercel_env: str = field(default_factory=lambda: _env("VERCEL_ENV", ""))
-    git_sha: str = field(default_factory=lambda: _env("VERCEL_GIT_COMMIT_SHA", "local"))
+    # Git-kopplade deployer får VERCEL_GIT_COMMIT_SHA; CLI-deploy av taggen sätter GIT_SHA.
+    git_sha: str = field(default_factory=lambda: _env("VERCEL_GIT_COMMIT_SHA", "") or _env("GIT_SHA", "local"))
     # Integrationsaffär: stoppa nya öppningar automatiskt efter första fyllda öppning i REAL_MICRO.
     integration_trade: bool = field(default_factory=lambda: _env("REAL_MICRO_INTEGRATION", "1") == "1")
     # Måste matcha /api/v1/me.username för att öppningar ska tillåtas
