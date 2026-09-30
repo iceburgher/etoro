@@ -46,13 +46,13 @@ def step(cfg: Config, api: Etoro, st: risk.State | None):
         if iid in held:  # annars köper den igen var 15:e minut så länge signalen står kvar
             log(event="blocked", instrument=iid, reason="har redan position")
             continue
-        amount = round(equity * cfg.max_per_trade_pct, 2)
+        amount = round(min(equity * cfg.max_per_trade_pct, cfg.max_trade_usd), 2)
         ok, why = risk.check_buy(cfg, st, iid, equity, invested, amount)
         if not ok:
             log(event="blocked", instrument=iid, reason=why)
             continue
-        if cfg.settlement_type not in api.settlement_types(iid):
-            log(event="blocked", instrument=iid, reason=f"kontot får inte köpa som {cfg.settlement_type}")
+        if (cfg.settlement_type, cfg.leverage) not in api.allowed_long(iid):
+            log(event="blocked", instrument=iid, reason=f"kontot får inte köpa {cfg.settlement_type} x{cfg.leverage}")
             continue
         if cfg.use_ai_filter and not ai_filter.approve(cfg.ai_model, str(iid), closes, []):
             log(event="ai_veto", instrument=iid)
@@ -60,9 +60,10 @@ def step(cfg: Config, api: Etoro, st: risk.State | None):
         px = closes[-1]
         sl, tp = px * (1 - cfg.stop_loss_pct), px * (1 + cfg.take_profit_pct)
         if not cfg.live:
-            log(event="DRY_RUN_buy", instrument=iid, amount=amount, sl=sl, tp=tp)
+            log(event="DRY_RUN_buy", instrument=iid, amount=amount, leverage=cfg.leverage,
+                exposure=amount * cfg.leverage, sl=round(sl, 2), tp=round(tp, 2))
             continue
-        res = api.open_buy(iid, amount, sl, tp, cfg.settlement_type)
+        res = api.open_buy(iid, amount, sl, tp, cfg.settlement_type, cfg.leverage)
         st.orders_today += 1
         log(event="order", instrument=iid, amount=amount, sl=sl, tp=tp, response=res)
     return st

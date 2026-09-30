@@ -16,6 +16,10 @@ class Config:
     max_orders_per_day: int = 4
     # "real" = äg riktiga andelar. "cfd" = derivat med nattavgifter. Väljs medvetet, aldrig automatiskt.
     settlement_type: str = "cfd"
+    # Hävstång: 5 = exponering 5x insatsen. Stop loss 3 % i pris = 15 % av insatsen vid x5.
+    leverage: int = 5
+    # Hårt tak på insats per affär i USD, oavsett vad kontosaldot säger (kontot är ~10 000 SEK ≈ 1 000 USD)
+    max_trade_usd: float = 200.0
     # Strategi
     fast_ma: int = 20
     slow_ma: int = 50

@@ -43,25 +43,26 @@ class Etoro:
         # pnl-varianten har unrealizedPnL, annars ser dagliga förlustspärren inga orealiserade förluster
         return self._req("GET", "/api/v1/trading/info/real/pnl")
 
-    def settlement_types(self, instrument_id: int) -> set[str]:
-        """Vilka settlementType kontot får köpa (long, hävstång 1) i instrumentet."""
+    def allowed_long(self, instrument_id: int) -> set[tuple[str, int]]:
+        """(settlementType, hävstång) som kontot får öppna long i instrumentet."""
         d = self._req("POST", "/api/v2/trading/info/eligibility", json={"instrumentIds": [instrument_id]})
         return {
-            c["settlementType"]
+            (c["settlementType"], lev)
             for e in d.get("eligibilities", []) if e.get("allowOpenPosition")
             for c in e.get("leverageConfigs", [])
-            if c.get("direction") == "long" and 1 in c.get("leverageValues", []) and not c.get("isPotential")
+            if c.get("direction") == "long" and not c.get("isPotential")
+            for lev in c.get("leverageValues", [])
         }
 
     def open_buy(self, instrument_id: int, amount_usd: float, sl_rate: float, tp_rate: float,
-                 settlement_type: str) -> dict:
+                 settlement_type: str, leverage: int) -> dict:
         body = {
             "action": "open",
             "transaction": "buy",
             "instrumentId": instrument_id,
             "settlementType": settlement_type,
             "orderType": "mkt",
-            "leverage": 1,
+            "leverage": leverage,
             "amount": round(amount_usd, 2),
             "orderCurrency": "usd",
             "stopLossRate": round(sl_rate, 4),
