@@ -22,6 +22,9 @@ class Config:
     min_exposure_usd: float = 1000.0
     # Hårt tak på insats per affär i USD, oavsett vad kontosaldot säger (kontot är ~10 000 SEK ≈ 1 000 USD)
     max_trade_usd: float = 200.0
+    # Agentportföljen har ~1000 USD, men API:et rapporterar credit 10000. Tills det är utrett räknas
+    # kontot som högst så här stort, så att alla %-regler blir rätt.
+    equity_cap_usd: float = 1000.0
     # Strategi
     fast_ma: int = 20
     slow_ma: int = 50

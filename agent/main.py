@@ -31,6 +31,9 @@ def step(cfg: Config, api: Etoro, st: risk.State | None):
     today = dt.date.today().isoformat()
     pf = api.portfolio()
     equity, invested, held = account_numbers(pf)
+    if equity > cfg.equity_cap_usd:
+        log(event="warning", reason="API-saldot större än taket, använder taket", api_equity=equity, cap=cfg.equity_cap_usd)
+        equity = cfg.equity_cap_usd
     if equity <= 0:
         log(event="stop", reason="kunde inte läsa kontovärde", raw_keys=list(pf)[:10])
         return st
