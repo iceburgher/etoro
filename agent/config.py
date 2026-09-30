@@ -14,6 +14,8 @@ class Config:
     take_profit_pct: float = 0.06
     daily_loss_halt_pct: float = 0.03    # pausa resten av dagen vid -3 %
     max_orders_per_day: int = 4
+    # "real" = äg riktiga andelar. "cfd" = derivat med nattavgifter. Väljs medvetet, aldrig automatiskt.
+    settlement_type: str = "real"
     # Strategi
     fast_ma: int = 20
     slow_ma: int = 50

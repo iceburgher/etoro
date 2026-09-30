@@ -12,18 +12,25 @@ def log(**kw):
     print(json.dumps({"t": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), **kw}, ensure_ascii=False), flush=True)
 
 
-def account_numbers(pf: dict) -> tuple[float, float]:
-    """(equity, invested). eToro lägger allt under clientPortfolio: credit = fritt saldo, positions[].amount = investerat."""
+def _iid(x: dict):
+    return x.get("instrumentId", x.get("instrumentID"))
+
+
+def account_numbers(pf: dict) -> tuple[float, float, set]:
+    """(equity, invested, instrument-id:n vi redan har position/väntande order i).
+    eToro: credit = fritt saldo, positions[].amount = investerat, unrealizedPnL = orealiserat."""
     cp = pf.get("clientPortfolio") or pf
-    credit = float(cp.get("credit") or 0)
-    invested = sum(float(p.get("amount") or 0) for p in cp.get("positions") or [])
-    return credit + invested, invested
+    positions = cp.get("positions") or []
+    pending = cp.get("ordersForOpen") or []
+    invested = sum(float(p.get("amount") or 0) for p in positions + pending)
+    equity = float(cp.get("credit") or 0) + invested + float(cp.get("unrealizedPnL") or 0)
+    return equity, invested, {_iid(p) for p in positions + pending}
 
 
 def step(cfg: Config, api: Etoro, st: risk.State | None):
     today = dt.date.today().isoformat()
     pf = api.portfolio()
-    equity, invested = account_numbers(pf)
+    equity, invested, held = account_numbers(pf)
     if equity <= 0:
         log(event="stop", reason="kunde inte läsa kontovärde", raw_keys=list(pf)[:10])
         return st
@@ -36,10 +43,16 @@ def step(cfg: Config, api: Etoro, st: risk.State | None):
         log(event="signal", instrument=iid, signal=sig, last=closes[-1])
         if sig != "buy":
             continue
+        if iid in held:  # annars köper den igen var 15:e minut så länge signalen står kvar
+            log(event="blocked", instrument=iid, reason="har redan position")
+            continue
         amount = round(equity * cfg.max_per_trade_pct, 2)
         ok, why = risk.check_buy(cfg, st, iid, equity, invested, amount)
         if not ok:
             log(event="blocked", instrument=iid, reason=why)
+            continue
+        if cfg.settlement_type not in api.settlement_types(iid):
+            log(event="blocked", instrument=iid, reason=f"kontot får inte köpa som {cfg.settlement_type}")
             continue
         if cfg.use_ai_filter and not ai_filter.approve(cfg.ai_model, str(iid), closes, []):
             log(event="ai_veto", instrument=iid)
@@ -49,7 +62,7 @@ def step(cfg: Config, api: Etoro, st: risk.State | None):
         if not cfg.live:
             log(event="DRY_RUN_buy", instrument=iid, amount=amount, sl=sl, tp=tp)
             continue
-        res = api.open_buy(iid, amount, sl, tp)
+        res = api.open_buy(iid, amount, sl, tp, cfg.settlement_type)
         st.orders_today += 1
         log(event="order", instrument=iid, amount=amount, sl=sl, tp=tp, response=res)
     return st

@@ -40,14 +40,26 @@ class Etoro:
         return [c["close"] for c in d["candles"][0]["candles"]]
 
     def portfolio(self) -> dict:
-        return self._req("GET", "/api/v1/trading/info/portfolio")
+        # pnl-varianten har unrealizedPnL, annars ser dagliga förlustspärren inga orealiserade förluster
+        return self._req("GET", "/api/v1/trading/info/real/pnl")
 
-    def open_buy(self, instrument_id: int, amount_usd: float, sl_rate: float, tp_rate: float) -> dict:
+    def settlement_types(self, instrument_id: int) -> set[str]:
+        """Vilka settlementType kontot får köpa (long, hävstång 1) i instrumentet."""
+        d = self._req("POST", "/api/v2/trading/info/eligibility", json={"instrumentIds": [instrument_id]})
+        return {
+            c["settlementType"]
+            for e in d.get("eligibilities", []) if e.get("allowOpenPosition")
+            for c in e.get("leverageConfigs", [])
+            if c.get("direction") == "long" and 1 in c.get("leverageValues", []) and not c.get("isPotential")
+        }
+
+    def open_buy(self, instrument_id: int, amount_usd: float, sl_rate: float, tp_rate: float,
+                 settlement_type: str) -> dict:
         body = {
             "action": "open",
             "transaction": "buy",
             "instrumentId": instrument_id,
-            "settlementType": "real",
+            "settlementType": settlement_type,
             "orderType": "mkt",
             "leverage": 1,
             "amount": round(amount_usd, 2),
