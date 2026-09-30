@@ -20,6 +20,8 @@ class RiskContext:
     fx: Quote | None
     unrealized_usd: float
     kill_switch: bool
+    halt_new_entries: bool = False
+    alerts_ready: bool = True
 
 
 class RiskEngine:
@@ -57,6 +59,14 @@ class RiskEngine:
             why.append("USDSEK saknas eller är gammal")
         if c.kill_switch:
             why.append("kill switch på")
+        if not c.alerts_ready:
+            why.append("larm (e-post) ej konfigurerat")
+        if c.halt_new_entries:
+            why.append("nya öppningar stoppade (halt_new_entries)")
+        if c.state.incident:
+            why.append(f"öppen incident: {c.state.incident.get('kind')}")
+        if len(c.snapshot.for_instrument(cfg.instrument)) + 1 > cfg.max_positions:
+            why.append("max antal GLD-positioner")
         if c.state.opens_today >= cfg.max_opens_per_day:
             why.append("max öppningar i dag")
         why += self._stop_and_size(ta, c)
