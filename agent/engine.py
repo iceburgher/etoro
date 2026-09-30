@@ -152,7 +152,9 @@ class Engine:
                 and not st.desired.get("exit_reason"):
             st.desired = {"side": actual.value, "adopted": True}
             self.log(event="desired_adopted_from_broker", side=actual.value)
-        if evaluate and latest > st.last_strategy_bar and actual != Actual.PENDING and st.incident is None:
+        # Strategijobbet är den primära triggern, men varje jobb utvärderar en ny stapel som ännu inte är
+        # utvärderad (t.ex. om monitor tog låset, datan inte var klar eller en order väntade). En gång per stapel.
+        if latest > st.last_strategy_bar and actual != Actual.PENDING and st.incident is None:
             self._evaluate(actual, now, latest)
         elif evaluate and latest <= st.last_strategy_bar:
             self.log(event="bar_already_evaluated", bar=latest)
@@ -163,7 +165,10 @@ class Engine:
                               identity_ok=self.identity_ok, eligibility=self.eligibility, quote=quote, fx=fx,
                               unrealized_usd=self._unrealized(snap, quote), kill_switch=self._kill(),
                               halt_new_entries=self.ctrl.get("halt_new_entries", False),
-                              alerts_ready=self.alerts_ready or not cfg.real)
+                              alerts_ready=self.alerts_ready or not cfg.real,
+                              integration_opens_sent=(self.store.count_sent_opens()
+                                                      if cfg.real and cfg.integration_trade and ta.action in OPENS
+                                                      else 0))
             why = self.risk.check(ta, ctx)
             if why:
                 self.log(event="blocked", reasons=why, **ta.log_dict())
@@ -176,10 +181,8 @@ class Engine:
                 result = self.exe.execute(ta, st, now)
                 if ta.action in OPENS and result == "dry_run":
                     st.skipped_keys.append(ta.idempotency_key)
-                if ta.action in OPENS and result == "filled" and cfg.real and cfg.integration_trade:
-                    self.store.set_control(halt_new_entries=True)
-                    self.alert(CRITICAL, "integration_trade_done",
-                               "Första riktiga affären fylld: nya öppningar stoppade tills rapporten granskats")
+                if ta.action in OPENS and result == "filled":
+                    self._integration_halt()
                 snap2 = self._safe(self.broker.snapshot) if result not in ("dry_run", "duplicate") else None
                 if snap2:
                     self._reconcile(snap2, now, latest, quote)
@@ -187,6 +190,18 @@ class Engine:
         self.log(event="cycle", actual=actual.value, desired=st.desired.get("side"), action=ta.action.value,
                  result=result, api_reported_value=snap.api_reported_value, incident=st.incident)
         return result
+
+    def _integration_halt(self):
+        """Efter första riktiga öppningen: stoppa nya öppningar och larma. Riskmotorn blockerar dessutom
+        oberoende av detta (räknar skickade öppningar i databasen), så ett missat anrop här släpper inget igenom."""
+        if not (self.cfg.real and self.cfg.integration_trade):
+            return
+        try:
+            self.store.set_control(halt_new_entries=True)
+        except Exception as e:
+            self.log(event="halt_write_failed", error=str(e))
+        self._alert_once(CRITICAL, "integration_trade_done",
+                         "Första riktiga affären fylld: nya öppningar stoppade tills rapporten granskats", "integration")
 
     def _kill(self) -> bool:
         return self.cfg.kill_switch_env or bool(self.ctrl.get("kill_switch"))
@@ -216,10 +231,20 @@ class Engine:
             st.week, st.realized_week_usd = week, 0.0
 
     def _realize(self, meta: dict, quote) -> float | None:
-        if not quote:
+        """Bokför realiserat resultat. Saknas kurs: hämta igen; saknas den fortfarande, räkna med stoppen
+        (sämsta planerade utfall), så att förlustgränserna aldrig underskattas."""
+        quote = quote or self._safe(self.broker.quote, self.cfg.instrument)
+        long = meta["side"] == "LONG"
+        if quote:
+            exit_px = quote.bid if long else quote.ask
+        elif meta.get("stop"):
+            exit_px = meta["stop"]
+            self.log(event="realized_estimated_at_stop", meta=meta)
+        else:
+            exit_px = meta["open_rate"]
+        if not meta.get("units") or not meta.get("open_rate"):
             return None
-        exit_px = quote.bid if meta["side"] == "LONG" else quote.ask
-        pnl = (exit_px - meta["open_rate"]) * meta["units"] * (1 if meta["side"] == "LONG" else -1)
+        pnl = (exit_px - meta["open_rate"]) * meta["units"] * (1 if long else -1)
         self.st.realized_day_usd += pnl
         self.st.realized_week_usd += pnl
         return pnl
@@ -232,19 +257,28 @@ class Engine:
         if p:
             age = (now - datetime.fromisoformat(p["submitted"])).total_seconds()
             if p["kind"] == "open":
-                s = self._safe(self.broker.lookup, p["key"])
+                try:
+                    s, lookup_ok = self.broker.lookup(p["key"]), True
+                except Exception as e:  # nätverksfel = vet inte; får aldrig tolkas som "okänd order"
+                    s, lookup_ok = None, False
+                    self.log(event="lookup_failed", key=p["key"], error=str(e))
+                if age > cfg.pending_timeout_s and (not lookup_ok or (s and not s.filled and not s.failed)):
+                    self._alert_once(CRITICAL, "unknown_order_state",
+                                     "Öppningsorder fortfarande oavgjord efter tidsgräns; inga nya affärer tills den är avgjord",
+                                     f"stuck-{p['key']}", key=p["key"], status=getattr(s, "status_id", None))
                 if s and s.filled:
                     self.exe.remember_fill(st, s.position_ids, None)
                     st.pending = None
                     st.opens_today += 1
                     self.exe._safe_intent(p["key"], status="filled")
+                    self._integration_halt()
                     self.log(event="reconciled_fill", key=p["key"], position_ids=list(s.position_ids))
                     self.alert(NORMAL, p["action"], f"{p['action']} fylld (bekräftad vid avstämning)", key=p["key"])
                 elif s and s.failed:
                     st.pending = None
                     self.exe._safe_intent(p["key"], status="rejected", error=s.error)
                     self.log(event="reconciled_reject", key=p["key"], error=s.error)
-                elif s is None and age > cfg.pending_timeout_s:
+                elif s is None and lookup_ok and age > cfg.pending_timeout_s:
                     st.pending = None
                     self.exe._safe_intent(p["key"], status="lost")
                     self.alert(CRITICAL, "unknown_order_state", "Order okänd hos eToro efter tidsgräns; markerad förlorad",

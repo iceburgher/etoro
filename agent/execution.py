@@ -33,8 +33,12 @@ class ExecutionEngine:
         if intent and intent["status"] in FINAL_INTENT:
             self.log(event="duplicate_open_skipped", key=key, status=intent["status"])
             return "duplicate"
-        if intent is None:
-            if not self.store.create_order_intent(key, ta.action.value, ta.instrument, ta.log_dict(), self.cfg.git_sha):
+        # 'created' = avsikten sparades men sändningen hann kanske aldrig ske (t.ex. databasfel före anropet).
+        # Känner eToro inte till request-id:t skickas ordern, med SAMMA request-id (eToro deduplicerar på det).
+        never_sent = intent is not None and intent["status"] == "created" and self._lookup_none(key)
+        if intent is None or never_sent:
+            if intent is None and not self.store.create_order_intent(key, ta.action.value, ta.instrument,
+                                                                     ta.log_dict(), self.cfg.git_sha):
                 self.log(event="duplicate_open_skipped", key=key, status="race")
                 return "duplicate"
             st.pending = {"kind": "open", "key": key, "action": ta.action.value, "submitted": now.isoformat(),
@@ -54,6 +58,14 @@ class ExecutionEngine:
             st.pending = st.pending or {"kind": "open", "key": key, "action": ta.action.value,
                                         "submitted": now.isoformat(), "signal_bar": ta.signal_bar}
         return self.poll_open(key, st, ta)
+
+    def _lookup_none(self, key: str) -> bool:
+        """True bara om eToro säkert svarar 'okänd order' (404). Nätverksfel = vet inte = False."""
+        try:
+            return self.broker.lookup(key) is None
+        except Exception as e:
+            self.log(event="lookup_failed", key=key, error=str(e))
+            return False
 
     def poll_open(self, key: str, st: State, ta: TradeAction | None = None) -> str:
         for _ in range(self.cfg.order_poll_tries):
@@ -101,7 +113,9 @@ class ExecutionEngine:
         st.pending = {"kind": "close", "key": key, "action": ta.action.value, "submitted": now.isoformat(),
                       "position_ids": list(ta.position_ids), "exit_reason": ta.exit_reason}
         self.store.save_state(st, self.cfg.git_sha)
-        if intent is None:
+        # Skicka om avsikten är ny eller aldrig skickad ('created'). Samma deterministiska request-id per
+        # position gör att en eventuell tidigare sändning dedupliceras hos eToro.
+        if intent is None or intent["status"] == "created":
             for i, pid in enumerate(ta.position_ids):
                 try:
                     res = self.broker.close_position(pid, ta.instrument, request_id=f"{key[:-4]}{i:04d}")

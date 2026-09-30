@@ -44,6 +44,8 @@ class FakeBroker:
         self.username = "AI Burger-UMYYUR"
         self.fx_age_s = 0
         self.snapshot_fails = False
+        self.quote_fails = False
+        self.lookup_fails = False
         self.next_pid = 100
 
     def identity(self):
@@ -65,17 +67,21 @@ class FakeBroker:
         return [Bar(last - step * (n - 1 - i), 380, 381, 379, 380) for i in range(n)]
 
     def quote(self, iid):
+        if self.quote_fails:
+            raise ConnectionError("kurs saknas")
         if iid == 58:
             return Quote(9.98, 9.99, self.clock() - timedelta(seconds=self.fx_age_s), True)
         return Quote(self.bid, self.ask, self.clock(), True)
 
     def lookup(self, key):
+        if self.lookup_fails:
+            raise ConnectionError("lookup nere")
         return self.orders.get(key)
 
-    def add_position(self, is_buy, stop, target, units=0.3, has_stop=True, open_rate=380.0):
+    def add_position(self, is_buy, stop, target, units=0.3, has_stop=True, open_rate=380.0, instrument=3025):
         pid = self.next_pid
         self.next_pid += 1
-        self.positions[pid] = BrokerPosition(pid, 3025, is_buy, units, units * open_rate / 2, open_rate,
+        self.positions[pid] = BrokerPosition(pid, instrument, is_buy, units, units * open_rate / 2, open_rate,
                                              stop if has_stop else None, target, 2, has_stop)
         return pid
 

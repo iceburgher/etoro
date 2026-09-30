@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 from .state import State
 
 FINAL_INTENT = {"filled", "rejected", "lost", "closed"}
+# Öppningar som kan ha nått eToro (räknas konservativt för integrationsspärren)
+SENT_OPEN = {"submitted", "filled", "unknown"}
 
 
 class DatabaseError(Exception):
@@ -58,6 +60,10 @@ class MemoryStore:
 
     def get_order_intent(self, key: str) -> dict | None:
         return self.intents.get(key)
+
+    def count_sent_opens(self) -> int:
+        return sum(1 for i in self.intents.values()
+                   if i["action"].startswith("OPEN") and i["status"] in SENT_OPEN)
 
     def log_event(self, job: str, event: str, payload: dict, git_sha: str) -> None:
         self.events.append({"job": job, "event": event, "payload": payload, "git_sha": git_sha})
@@ -141,6 +147,11 @@ class PgStore:
         if not row:
             return None
         return dict(zip(("action", "instrument", "status", "payload", "broker_order_id", "error", "git_sha"), row))
+
+    def count_sent_opens(self) -> int:
+        row = self._run("""select count(*) from order_intents
+                           where action like 'OPEN%%' and status = any(%s)""", (list(SENT_OPEN),), fetch="one")
+        return int(row[0])
 
     def log_event(self, job: str, event: str, payload: dict, git_sha: str) -> None:
         self._run("insert into events (job, event, payload, git_sha) values (%s, %s, %s, %s)",

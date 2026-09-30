@@ -88,4 +88,6 @@ Efter integrationsaffären: `update control set halt_new_entries = false;` förs
    har passerat. Inga strategiändringar under perioden.
 7. Integrationsaffär: sätt `EXECUTION_MODE=REAL_MICRO`, `REAL_MICRO_INTEGRATION=1`, deploya om samma tagg.
    Efter första fyllningen stoppas nya öppningar automatiskt. Kör `python -m agent.report` och granska.
-8. Först efter godkänd rapport: `update control set halt_new_entries = false;`.
+8. Först efter godkänd rapport: sätt `REAL_MICRO_INTEGRATION=0` i Vercel, deploya om samma tagg och kör
+   `update control set halt_new_entries = false;`. Så länge `REAL_MICRO_INTEGRATION=1` blockerar riskmotorn
+   alla nya öppningar när en riktig öppning finns i `order_intents`, oavsett halt-flaggan.

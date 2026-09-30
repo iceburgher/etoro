@@ -22,6 +22,7 @@ class RiskContext:
     kill_switch: bool
     halt_new_entries: bool = False
     alerts_ready: bool = True
+    integration_opens_sent: int = 0   # skickade riktiga öppningar i databasen (integrationsläge)
 
 
 class RiskEngine:
@@ -61,6 +62,8 @@ class RiskEngine:
             why.append("kill switch på")
         if not c.alerts_ready:
             why.append("larm (e-post) ej konfigurerat")
+        if c.integration_opens_sent >= 1:
+            why.append("integrationsaffären är gjord: sätt REAL_MICRO_INTEGRATION=0 efter godkänd rapport")
         if c.halt_new_entries:
             why.append("nya öppningar stoppade (halt_new_entries)")
         if c.state.incident:
@@ -96,7 +99,8 @@ class RiskEngine:
         if el and (exposure < el.min_exposure or units > el.max_units or units <= 0):
             why.append("ogiltig storlek")
         cap_usd = sz.get("allocated_capital_usd", 0)
-        held = sum(p.units * (c.quote.mid if c.quote else p.open_rate) for p in c.snapshot.positions)
+        held = sum(p.units * (c.quote.mid if c.quote else p.open_rate)
+                   for p in c.snapshot.for_instrument(self.cfg.instrument))
         if exposure + held > cap_usd * self.cfg.max_exposure_pct:
             why.append("över max exponering")
         return why
