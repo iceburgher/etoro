@@ -44,14 +44,25 @@ def signal(bars, side: str) -> str | None:
     return None
 
 
-def stop_target(bars, side: str, entry: float) -> tuple[float, float]:
-    a = atr(bars, P["atr_len"])
+def swing_and_atr(bars, side: str) -> tuple[float, float]:
+    """Swingnivå (lägsta botten / högsta topp senaste 7 staplarna) och ATR(14) på signalstapeln."""
     swing = bars[-P["swing_lb"]:]
+    level = min(b.low for b in swing) if side == "LONG" else max(b.high for b in swing)
+    return level, atr(bars, P["atr_len"])
+
+
+def stop_from(side: str, swing: float, a: float, entry: float) -> tuple[float, float]:
+    """Stop och 2R-mål för en given ingång. Används med faktisk kurs vid order."""
     if side == "LONG":
-        stop = min(min(b.low for b in swing) - P["stop_buf_atr"] * a, entry - P["min_stop_atr"] * a)
+        stop = min(swing - P["stop_buf_atr"] * a, entry - P["min_stop_atr"] * a)
         return stop, entry + P["rr"] * (entry - stop)
-    stop = max(max(b.high for b in swing) + P["stop_buf_atr"] * a, entry + P["min_stop_atr"] * a)
+    stop = max(swing + P["stop_buf_atr"] * a, entry + P["min_stop_atr"] * a)
     return stop, entry - P["rr"] * (stop - entry)
+
+
+def stop_target(bars, side: str, entry: float) -> tuple[float, float]:
+    swing, a = swing_and_atr(bars, side)
+    return stop_from(side, swing, a, entry)
 
 
 def exit_reason(side: str, reg: str | None, bars) -> str | None:

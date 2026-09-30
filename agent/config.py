@@ -1,39 +1,51 @@
 import os
 from dataclasses import dataclass, field
 
+MODES = ("DRY_RUN", "REAL_MICRO")
+
+
+def _env(name, default, cast=str):
+    v = os.getenv(name)
+    return default if v in (None, "") else cast(v)
+
 
 @dataclass(frozen=True)
 class Config:
     base_url: str = "https://public-api.etoro.com"
-    # Bara dessa instrument får handlas. Allt annat blockeras.
-    allowed_instruments: tuple = (3025,)  # 3025 = GLD som CFD (min 10 USD). 18 = GOLD (min 1000 USD exponering)
-    # Risk (i USD / procent)
-    max_per_trade_pct: float = 0.20      # max andel av kontot per trade
-    max_total_exposure_pct: float = 0.40  # max andel av kontot investerat totalt
-    stop_loss_pct: float = 0.03          # obligatorisk stop loss under inköpspris
-    take_profit_pct: float = 0.06
-    daily_loss_halt_pct: float = 0.03    # pausa resten av dagen vid -3 %
-    max_orders_per_day: int = 4
-    # "real" = äg riktiga andelar. "cfd" = derivat med nattavgifter. Väljs medvetet, aldrig automatiskt.
-    settlement_type: str = "cfd"
-    # Hävstång: 2 = exponering 2x insatsen. Stop loss 3 % i pris = 6 % av insatsen vid x2.
-    leverage: int = 2
-    # eToros minsta exponering (insats x hävstång) för GLD CFD
-    min_exposure_usd: float = 10.0
-    # Valutor. Riskbasen = ditt faktiskt avsatta kapital, inte API:ets saldo (10 000, betydelse ej bevisad).
-    allocated_capital_usd: float = 1000.0        # = SEK 9 983,59 i appen
-    portfolio_display_currency: str = "SEK"
+    # Körläge. REAL_MICRO kräver uttrycklig konfiguration; allt annat = torrkörning.
+    mode: str = field(default_factory=lambda: _env("EXECUTION_MODE", "DRY_RUN"))
+    # Måste matcha /api/v1/me.username för att REAL_MICRO ska starta
+    expected_portfolio: str = field(default_factory=lambda: _env("EXPECTED_PORTFOLIO", "AI Burger-UMYYUR"))
+    # Instrument: GLD som CFD (eToro 3025), USD. USDSEK = eToro 58.
+    instrument: int = 3025
+    instrument_symbol: str = "GLD"
     instrument_currency: str = "USD"
+    fx_instrument: int = 58
+    leverage: int = 2
+    # Riskbas: avsatt kapital i SEK. eToros API-värde (10 000) används aldrig för risk.
+    allocated_capital_sek: float = field(default_factory=lambda: _env("ALLOCATED_CAPITAL_SEK", 9983.59, float))
+    portfolio_display_currency: str = "SEK"
     risk_per_trade: float = 0.0025
-    fx_instrument: int = 58                      # USDSEK hos eToro
+    daily_loss_pct: float = 0.01
+    weekly_loss_pct: float = 0.025
+    max_exposure_pct: float = 0.50       # nominell exponering / kapital
+    max_opens_per_day: int = 2
+    # Färskhet
     fx_max_age_s: int = 300
-    # Riktiga ÖPPNINGAR är spärrade tills valutamodellen är verifierad, även med LIVE=yes
-    real_open_enabled: bool = False
-    # Strategi
-    fast_ma: int = 20
-    slow_ma: int = 50
-    poll_seconds: int = 900
-    # Säkerhet: riktig handel kräver LIVE=yes
-    live: bool = field(default_factory=lambda: os.getenv("LIVE") == "yes")
-    use_ai_filter: bool = field(default_factory=lambda: bool(os.getenv("ANTHROPIC_API_KEY")))
-    ai_model: str = "claude-sonnet-5-5"
+    quote_max_age_s: int = 120
+    bar_grace_s: int = 1800              # hur länge efter stapelns slut en signal får användas
+    # Loopar och väntetider
+    monitor_seconds: int = 60
+    order_poll_tries: int = 10
+    order_poll_sleep_s: float = 2.0
+    pending_timeout_s: int = 600
+    # Filer
+    state_file: str = field(default_factory=lambda: _env("STATE_FILE", "state.json"))
+    kill_switch_file: str = field(default_factory=lambda: _env("KILL_SWITCH_FILE", "KILL_SWITCH"))
+
+    @property
+    def real(self) -> bool:
+        return self.mode == "REAL_MICRO"
+
+    def kill_switch(self) -> bool:
+        return os.getenv("KILL_SWITCH", "").lower() in ("1", "yes", "on", "true") or os.path.exists(self.kill_switch_file)

@@ -1,20 +1,20 @@
 """Positionsstorlek med separata valutor.
 
-Riskbasen är ditt faktiskt avsatta kapital (allocated_capital_usd, ~1 000 USD = SEK 9 983,59).
-API:ets saldo på 10 000 används INTE för storlek förrän det är bevisat vad det betyder.
-GLD handlas i USD, så pris, stop, exponering och insats räknas i USD; förlusten kontrolleras även i SEK.
+Riskbasen är avsatt kapital i SEK (allocated_capital_sek). Riskbudgeten räknas om till USD med USDSEK,
+eftersom GLD:s pris, stop, exponering och ordrar är i USD. Enheter avrundas nedåt, och förväntad
+förlust vid stop kontrolleras i både USD och SEK. eToros API-värde på 10 000 används aldrig här.
 """
 import math
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 
 @dataclass(frozen=True)
 class Sizing:
-    allocated_capital_usd: float
     allocated_capital_sek: float
+    allocated_capital_usd: float
     portfolio_display_currency: str
     instrument_currency: str
-    price_usd: float
+    gld_price_usd: float
     stop_usd: float
     usdsek_rate: float
     fx_timestamp: str
@@ -29,25 +29,27 @@ class Sizing:
     expected_loss_at_stop_sek: float
     within_budget: bool
 
+    def as_dict(self) -> dict:
+        return asdict(self)
 
-def size_trade(*, allocated_capital_usd: float, price_usd: float, stop_usd: float, leverage: int,
+
+def size_trade(*, allocated_capital_sek: float, price_usd: float, stop_usd: float, leverage: int,
                usdsek_rate: float, fx_timestamp: str, fx_source: str, risk_pct: float,
                unit_step: float = 0.01) -> Sizing:
-    if min(allocated_capital_usd, price_usd, usdsek_rate) <= 0 or leverage < 1:
+    if min(allocated_capital_sek, price_usd, usdsek_rate) <= 0 or leverage < 1:
         raise ValueError("ogiltig indata för storlek")
     dist = abs(price_usd - stop_usd)
     if dist <= 0:
         raise ValueError("stop lika med pris")
-    capital_sek = allocated_capital_usd * usdsek_rate
-    risk_budget_sek = capital_sek * risk_pct
+    risk_budget_sek = allocated_capital_sek * risk_pct
     risk_budget_usd = risk_budget_sek / usdsek_rate
     units = round(math.floor(risk_budget_usd / dist / unit_step) * unit_step, 8)  # alltid nedåt
     loss_usd = units * dist
     loss_sek = loss_usd * usdsek_rate
     notional = units * price_usd
     return Sizing(
-        allocated_capital_usd=allocated_capital_usd, allocated_capital_sek=capital_sek,
-        portfolio_display_currency="SEK", instrument_currency="USD", price_usd=price_usd, stop_usd=stop_usd,
+        allocated_capital_sek=allocated_capital_sek, allocated_capital_usd=allocated_capital_sek / usdsek_rate,
+        portfolio_display_currency="SEK", instrument_currency="USD", gld_price_usd=price_usd, stop_usd=stop_usd,
         usdsek_rate=usdsek_rate, fx_timestamp=fx_timestamp, fx_source=fx_source, risk_pct=risk_pct,
         risk_budget_sek=risk_budget_sek, risk_budget_usd=risk_budget_usd, units=units,
         notional_exposure_usd=notional, margin_required_usd=notional / leverage,
