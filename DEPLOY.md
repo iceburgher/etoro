@@ -58,8 +58,9 @@ Efter integrationsaffären: `update control set halt_new_entries = false;` förs
 - **Resend:** API-nyckel `guldagenten-alerts` (bara sändning). Avsändare `onboarding@resend.dev` tills en egen
   domän verifierats; då kan larm bara gå till Resend-kontots ägaradress. Testlarm skickat.
 - **Vercel:** projekt `guldagenten` i teamet Iceburgher's projects, funktionsregion arn1 (Stockholm).
-  **Inte** kopplat till GitHub, så inget deployas automatiskt; produktion deployas bara med CLI från en tagg.
-  Satta variabler: `EXECUTION_MODE=DRY_RUN`, `REAL_MICRO_INTEGRATION`, `EXPECTED_PORTFOLIO`,
+  **Inte** kopplat till GitHub, så inget deployas automatiskt; produktion deployas bara manuellt från `main`
+  (CLI, eller Vercel-API:t med `gitSource` = `main` + commit-SHA, som då sätter `VERCEL_GIT_COMMIT_SHA`).
+  Satta variabler: `EXECUTION_MODE` (se "Läge nu"), `REAL_MICRO_INTEGRATION`, `EXPECTED_PORTFOLIO`,
   `ALLOCATED_CAPITAL_SEK`, `KILL_SWITCH`, `ALERT_EMAIL_TO`, `ALERT_EMAIL_FROM`, `RESEND_API_KEY`, `CRON_SECRET`.
 - **Kvar att lägga in själv (hemligheter):** `ETORO_USER_KEY`, `ETORO_API_KEY` och `DATABASE_URL`
   (Supabase → Connect → Transaction pooler, port 6543, med databaslösenordet; lägg till `?sslmode=require`).
@@ -69,6 +70,18 @@ Efter integrationsaffären: `update control set halt_new_entries = false;` förs
   (deployment protection är på). Antingen skapa en "Protection Bypass for Automation"-token och lägg den i
   Vault som `guldagenten_bypass`, eller stäng av skyddet för Production (funktionerna kräver ändå CRON_SECRET).
 - **Hobby-villkor:** Vercel Hobby är avsett för icke-kommersiellt personligt bruk.
+
+## Läge nu (30 sep kväll)
+
+- **Körläge:** `EXECUTION_MODE=REAL_MICRO` i Production sedan 30 sep 16:49 UTC, på ägarens begäran
+  (torrkörningen hoppades över). Preview/development har kvar `DRY_RUN`. `REAL_MICRO_INTEGRATION=1`:
+  efter första fyllda öppningen stoppas nya öppningar tills rapporten granskats (steg 7–8 nedan).
+- **Risk per affär:** 0,5 % av avsatt kapital (cirka 50 kr), höjd från 0,25 % i PR #2. Övrigt oförändrat:
+  hävstång 2x, max 1 position, max exponering 50 % (cirka 5 000 kr), förlustgräns 1 %/dag, 2,5 %/vecka.
+  Obs: en affär vars storlek skulle gå över exponeringstaket blockeras (krymps inte).
+- **Live-version:** `v1.1.1` = `09fb5a2` på `main`.
+- **Kontrollerat 30 sep:** pg_cron → Vercel ger 200 varje minut; larm från appen via Resend nådde
+  mottagaren (kill switch-test 16:52 UTC).
 
 ## Deploy (aldrig från feature-gren)
 
