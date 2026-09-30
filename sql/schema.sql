@@ -60,3 +60,12 @@ create table if not exists control (
     updated_at        timestamptz not null default now()
 );
 insert into control (id) values (1) on conflict do nothing;
+
+-- Supabase exponerar public-schemat via sitt REST-API. RLS utan policyer stänger det helt;
+-- agenten ansluter direkt som databasägare och påverkas inte.
+alter table agent_state   enable row level security;
+alter table job_locks     enable row level security;
+alter table order_intents enable row level security;
+alter table events        enable row level security;
+alter table incidents     enable row level security;
+alter table control       enable row level security;
