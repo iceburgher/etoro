@@ -32,6 +32,24 @@ def test_short_rally_trigger_mirrors_long():
     assert s.signal(bars(closes), "LONG") is None
 
 
+def test_no_long_trigger_below_ma50():
+    from agent.indicators import sma
+    up = [100 + i * 0.5 for i in range(60)]
+    closes = up + [110] * 19 + [113]  # över MA20 och förra toppen, men under MA50
+    c = closes
+    assert c[-1] > sma(c, 20) and c[-1] > c[-2] + 1 and c[-1] < sma(c, 50)
+    assert s.signal(bars(closes), "LONG") is None
+
+
+def test_no_short_trigger_above_ma50():
+    from agent.indicators import sma
+    down = [200 - i * 0.5 for i in range(60)]
+    closes = down + [190] * 19 + [187]
+    c = closes
+    assert c[-1] < sma(c, 20) and c[-1] < c[-2] - 1 and c[-1] > sma(c, 50)
+    assert s.signal(bars(closes), "SHORT") is None
+
+
 def test_no_trigger_without_setup():
     up = [100 + i * 0.5 for i in range(63)]  # ingen rekyl under MA20
     assert s.signal(bars(up), "LONG") is None

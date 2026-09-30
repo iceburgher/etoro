@@ -5,7 +5,7 @@ Parametrarna får inte ändras utifrån backtestresultat.
 """
 from .indicators import atr, sma, sma_series
 
-VERSION = "gld-v1"
+VERSION = "gld-v1.1"  # v1.1: trigger måste stänga på rätt sida om 4H-MA50
 P = dict(ma_fast=20, ma_slow=50, slope_lb=5, setup_ma=20, setup_lb=6, exit_ma=50,
          atr_len=14, swing_lb=7, stop_buf_atr=0.25, min_stop_atr=1.0, rr=2.0)
 
@@ -31,16 +31,18 @@ def signal(bars, side: str) -> str | None:
         return None
     closes = [b.close for b in bars]
     ma = sma_series(closes, P["setup_ma"])
+    ma50 = sma(closes, P["exit_ma"])
     last, prev = bars[-1], bars[-2]
     window = range(len(bars) - 1 - n, len(bars) - 1)
+    # Triggern kräver även rätt sida om 4H-MA50, annars skulle exitregeln slå till direkt (v1.1).
     if side == "LONG":
         setup = any(ma[i] is not None and closes[i] < ma[i] for i in window)
-        if setup and last.close > ma[-1] and last.close > prev.high:
-            return "4h_pullback_below_ma20_then_close_above_ma20_and_prev_high"
+        if setup and last.close > ma[-1] and last.close > prev.high and last.close > ma50:
+            return "4h_pullback_below_ma20_then_close_above_ma20_ma50_and_prev_high"
     if side == "SHORT":
         setup = any(ma[i] is not None and closes[i] > ma[i] for i in window)
-        if setup and last.close < ma[-1] and last.close < prev.low:
-            return "4h_rally_above_ma20_then_close_below_ma20_and_prev_low"
+        if setup and last.close < ma[-1] and last.close < prev.low and last.close < ma50:
+            return "4h_rally_above_ma20_then_close_below_ma20_ma50_and_prev_low"
     return None
 
 
