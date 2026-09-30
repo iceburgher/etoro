@@ -13,10 +13,11 @@ def log(**kw):
 
 
 def account_numbers(pf: dict) -> tuple[float, float]:
-    """(equity, invested). Verifiera fältnamnen mot första riktiga svaret (körs i dry-run först)."""
-    equity = float(pf.get("totalValue") or pf.get("equity") or 0)
-    invested = float(pf.get("invested") or pf.get("totalInvested") or 0)
-    return equity, invested
+    """(equity, invested). eToro lägger allt under clientPortfolio: credit = fritt saldo, positions[].amount = investerat."""
+    cp = pf.get("clientPortfolio") or pf
+    credit = float(cp.get("credit") or 0)
+    invested = sum(float(p.get("amount") or 0) for p in cp.get("positions") or [])
+    return credit + invested, invested
 
 
 def step(cfg: Config, api: Etoro, st: risk.State | None):
