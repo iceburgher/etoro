@@ -31,6 +31,7 @@ class FakeBroker:
         self.opened, self.closed = [], []
         self.bid, self.ask = 380.0, 380.1
         self.username = "AI Burger-UMYYUR"
+        self.fx_age_s = 0
         self.next_pid = 100
 
     def identity(self):
@@ -51,7 +52,7 @@ class FakeBroker:
 
     def quote(self, iid):
         if iid == 58:
-            return Quote(9.98, 9.99, self.clock(), True)
+            return Quote(9.98, 9.99, self.clock() - timedelta(seconds=self.fx_age_s), True)
         return Quote(self.bid, self.ask, self.clock(), True)
 
     def lookup(self, key):

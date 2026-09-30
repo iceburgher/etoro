@@ -290,6 +290,14 @@ def test_stale_signal_bar_is_not_traded():
     assert eng.cycle() == "blocked" and not b.opened
 
 
+def test_stale_usdsek_blocks_open():
+    eng, b, s, c, logs = make()
+    b.fx_age_s = 600
+    s.reg, s.sig = "LONG", {"LONG": "trigger"}
+    assert eng.cycle() == "blocked" and not b.opened
+    assert any("USDSEK saknas eller är gammal" in l["reasons"] for l in events(logs, "blocked"))
+
+
 def test_order_sizes_to_risk_budget_in_sek():
     eng, b, s, c, logs = make()
     open_long(eng, b, s)
