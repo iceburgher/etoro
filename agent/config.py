@@ -20,10 +20,8 @@ class Config:
     leverage: int = 2
     # eToros minsta exponering (insats x hävstång) för GLD CFD
     min_exposure_usd: float = 10.0
-    # Valutor. Agentportföljen = virtuellt saldo i USD (eToro: agentPortfolioVirtualBalance = 10 000 USD).
-    # Din kopia = eget belopp i USD som visas i SEK i appen (SEK 9 983,59 ≈ 1 000 USD).
-    agent_virtual_balance_usd: float = 10000.0   # kontrolleras mot API:et varje varv
-    copy_investment_usd: float = 1000.0          # ditt kopieringsbelopp
+    # Valutor. Riskbasen = ditt faktiskt avsatta kapital, inte API:ets saldo (10 000, betydelse ej bevisad).
+    allocated_capital_usd: float = 1000.0        # = SEK 9 983,59 i appen
     portfolio_display_currency: str = "SEK"
     instrument_currency: str = "USD"
     risk_per_trade: float = 0.0025

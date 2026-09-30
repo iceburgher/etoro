@@ -32,8 +32,9 @@ def step(cfg: Config, api: Etoro, st: risk.State | None):
     today = dt.date.today().isoformat()
     pf = api.portfolio()
     equity, invested, held = account_numbers(pf)
-    if abs(equity - cfg.agent_virtual_balance_usd) > 0.5 * cfg.agent_virtual_balance_usd:
-        log(event="warning", reason="agentsaldo skiljer mycket från förväntat", agent_equity_usd=equity)
+    # API:et rapporterar 10 000 (betydelse ej bevisad). Riskregler räknas på avsatt kapital.
+    log(event="account", api_reported_value=equity, risk_base_usd=cfg.allocated_capital_usd)
+    equity = cfg.allocated_capital_usd
     if equity <= 0:
         log(event="stop", reason="kunde inte läsa kontovärde", raw_keys=list(pf)[:10])
         return st
@@ -57,7 +58,7 @@ def step(cfg: Config, api: Etoro, st: risk.State | None):
         if fx.get("quoteType") != "realtime" or fx_age > cfg.fx_max_age_s:
             log(event="blocked", instrument=iid, reason="USDSEK saknas eller är gammal", fx=fx)
             continue
-        sz = sizing.size_trade(agent_equity_usd=equity, copy_investment_usd=cfg.copy_investment_usd,
+        sz = sizing.size_trade(allocated_capital_usd=cfg.allocated_capital_usd,
                                price_usd=px, stop_usd=sl, leverage=cfg.leverage,
                                usdsek_rate=(fx["bid"] + fx["ask"]) / 2, fx_timestamp=fx["date"],
                                fx_source="eToro rates, instrument 58 USDSEK", risk_pct=cfg.risk_per_trade)
