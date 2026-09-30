@@ -16,8 +16,10 @@ class Config:
     max_orders_per_day: int = 4
     # "real" = äg riktiga andelar. "cfd" = derivat med nattavgifter. Väljs medvetet, aldrig automatiskt.
     settlement_type: str = "cfd"
-    # Hävstång: 5 = exponering 5x insatsen. Stop loss 3 % i pris = 15 % av insatsen vid x5.
-    leverage: int = 5
+    # Hävstång: 2 = exponering 2x insatsen. Stop loss 3 % i pris = 6 % av insatsen vid x2.
+    leverage: int = 2
+    # eToros minsta exponering (insats x hävstång) för GOLD CFD
+    min_exposure_usd: float = 1000.0
     # Hårt tak på insats per affär i USD, oavsett vad kontosaldot säger (kontot är ~10 000 SEK ≈ 1 000 USD)
     max_trade_usd: float = 200.0
     # Strategi

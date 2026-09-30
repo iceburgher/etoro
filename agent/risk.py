@@ -29,4 +29,6 @@ def check_buy(cfg: Config, st: State, instrument_id: int, equity: float, investe
         return False, "över max total exponering"
     if amount < 10:
         return False, "under minsta belopp"
+    if amount * cfg.leverage < cfg.min_exposure_usd:
+        return False, "under eToros minsta exponering"
     return True, "ok"
