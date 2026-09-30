@@ -281,3 +281,45 @@ def test_integration_trade_halts_new_entries_after_first_fill():
     s.exit = None
     S(eng)                                               # men ingen ny öppning
     assert len(b.opened) == 1 and sides(b) == []
+
+
+# ---------- armerad integrationsaffär (kill switch på, en enda affär får passera) ----------
+def test_armed_integration_trade_passes_kill_switch_once_then_kill_switch_stays_on():
+    eng, b, s, c, logs = make(integration_trade=True)
+    eng.store.set_control(kill_switch=True, integration_armed=True)
+    open_long(eng, b, s)
+    sz = events(logs, "order_submitted")[0]["sizing"]
+    assert sz["risk_pct"] == 0.0025 and sz["expected_loss_at_stop_sek"] <= sz["risk_budget_sek"] <= 25.0
+    ctrl = eng.store.control()
+    assert ctrl == {"kill_switch": True, "halt_new_entries": True, "integration_armed": False}
+    assert "integration_trade_done" in alerts(eng, "critical")
+    c.next_bar()
+    s.exit = "daily_regime_not_long"
+    assert S(eng) == "closed"                            # stängning tillåts trots kill switch
+    c.next_bar()
+    s.exit = None
+    eng.store.set_control(integration_armed=True)        # även om någon armerar igen: bara en affär
+    S(eng)
+    assert len(b.opened) == 1 and sides(b) == []
+
+
+def test_kill_switch_blocks_open_when_not_armed_in_integration_mode():
+    eng, b, s, c, logs = make(integration_trade=True)
+    eng.store.set_control(kill_switch=True)
+    s.reg, s.sig = "LONG", {"LONG": "trigger"}
+    assert S(eng) == "blocked" and not b.opened
+
+
+def test_armed_does_not_bypass_kill_switch_outside_integration_mode():
+    eng, b, s, c, logs = make(integration_trade=False)
+    eng.store.set_control(kill_switch=True, integration_armed=True)
+    s.reg, s.sig = "LONG", {"LONG": "trigger"}
+    assert S(eng) == "blocked" and not b.opened
+
+
+def test_armed_does_not_send_real_orders_in_dry_run():
+    eng, b, s, c, logs = make(mode="DRY_RUN", integration_trade=True)
+    eng.store.set_control(kill_switch=True, integration_armed=True)
+    s.reg, s.sig = "LONG", {"LONG": "trigger"}
+    S(eng)
+    assert not b.opened

@@ -68,7 +68,7 @@ def test_state_control_events_incidents_roundtrip(pg):
     pg.save_state(st, "abc")
     assert pg.load_state().desired["side"] == "LONG" and pg.load_state().deployed_sha == "abc"
     pg.set_control(kill_switch=True)
-    assert pg.control() == {"kill_switch": True, "halt_new_entries": False}
+    assert pg.control() == {"kill_switch": True, "halt_new_entries": False, "integration_armed": False}
     pg.log_event("monitor", "cycle", {"x": 1}, "abc")
     pg.open_incident("long_and_short", {"p": [1, 2]})
     pg.resolve_incidents("long_and_short")

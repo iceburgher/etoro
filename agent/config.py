@@ -33,6 +33,7 @@ class Config:
     allocated_capital_sek: float = field(default_factory=lambda: _env("ALLOCATED_CAPITAL_SEK", 9983.59, float))
     portfolio_display_currency: str = "SEK"
     risk_per_trade: float = 0.005
+    integration_risk_per_trade: float = 0.0025   # den enda integrationsaffären (REAL_MICRO_INTEGRATION=1)
     daily_loss_pct: float = 0.01
     weekly_loss_pct: float = 0.025
     max_exposure_pct: float = 0.50       # nominell exponering / kapital

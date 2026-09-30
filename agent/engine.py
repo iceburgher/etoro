@@ -53,7 +53,7 @@ class Engine:
         self.risk = RiskEngine(cfg)
         self.exe = ExecutionEngine(cfg, broker, store, self.log, sleep, alert)
         self.st = State()
-        self.ctrl = {"kill_switch": False, "halt_new_entries": False}
+        self.ctrl = {"kill_switch": False, "halt_new_entries": False, "integration_armed": False}
         self.job = ""
         self.identity_ok = False
         self.eligibility = None
@@ -165,6 +165,7 @@ class Engine:
                               identity_ok=self.identity_ok, eligibility=self.eligibility, quote=quote, fx=fx,
                               unrealized_usd=self._unrealized(snap, quote), kill_switch=self._kill(),
                               halt_new_entries=self.ctrl.get("halt_new_entries", False),
+                              integration_armed=self.ctrl.get("integration_armed", False),
                               alerts_ready=self.alerts_ready or not cfg.real,
                               integration_opens_sent=(self.store.count_sent_opens()
                                                       if cfg.real and cfg.integration_trade and ta.action in OPENS
@@ -192,12 +193,13 @@ class Engine:
         return result
 
     def _integration_halt(self):
-        """Efter första riktiga öppningen: stoppa nya öppningar och larma. Riskmotorn blockerar dessutom
-        oberoende av detta (räknar skickade öppningar i databasen), så ett missat anrop här släpper inget igenom."""
+        """Efter första riktiga öppningen: kill switch på igen, avarmera, stoppa nya öppningar och larma.
+        Riskmotorn blockerar dessutom oberoende av detta (räknar skickade öppningar i databasen), så ett missat
+        anrop här släpper inget igenom. Stängningar blockeras aldrig av kill switch."""
         if not (self.cfg.real and self.cfg.integration_trade):
             return
         try:
-            self.store.set_control(halt_new_entries=True)
+            self.store.set_control(kill_switch=True, halt_new_entries=True, integration_armed=False)
         except Exception as e:
             self.log(event="halt_write_failed", error=str(e))
         self._alert_once(CRITICAL, "integration_trade_done",
@@ -467,7 +469,9 @@ class Engine:
         stop, target = self.strategy.stop_from(side, d["swing"], d["atr"], entry)
         sz = size_trade(allocated_capital_sek=cfg.allocated_capital_sek, price_usd=entry, stop_usd=stop,
                         leverage=cfg.leverage, usdsek_rate=fx.mid, fx_timestamp=fx.time.isoformat(),
-                        fx_source="eToro rates, instrument 58 USDSEK", risk_pct=cfg.risk_per_trade)
+                        fx_source="eToro rates, instrument 58 USDSEK",
+                        risk_pct=cfg.integration_risk_per_trade if cfg.real and cfg.integration_trade
+                        else cfg.risk_per_trade)
         return self._ta(action, actual, now, entry_reason=d.get("entry_reason"), proposed_entry=entry,
                         proposed_stop=round(stop, 4), proposed_target=round(target, 4),
                         risk_budget=sz.risk_budget_sek, position_size=sz.units, leverage=cfg.leverage,

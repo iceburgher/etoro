@@ -24,7 +24,7 @@ class MemoryStore:
         self.intents: dict[str, dict] = {}
         self.events: list[dict] = []
         self.incidents: list[dict] = []
-        self.ctrl = {"kill_switch": False, "halt_new_entries": False}
+        self.ctrl = {"kill_switch": False, "halt_new_entries": False, "integration_armed": False}
         self.fail_saves_after: int | None = None   # testkrok: kasta DatabaseError från och med N:e sparningen
         self.saves = 0
 
@@ -164,10 +164,12 @@ class PgStore:
         self._run("update incidents set resolved_at = now() where kind = %s and resolved_at is null", (kind,))
 
     def control(self) -> dict:
-        row = self._run("select kill_switch, halt_new_entries from control where id = 1", fetch="one")
-        return {"kill_switch": bool(row and row[0]), "halt_new_entries": bool(row and row[1])}
+        row = self._run("select kill_switch, halt_new_entries, integration_armed from control where id = 1",
+                        fetch="one")
+        return {"kill_switch": bool(row and row[0]), "halt_new_entries": bool(row and row[1]),
+                "integration_armed": bool(row and row[2])}
 
     def set_control(self, **kw) -> None:
-        cols = [c for c in ("kill_switch", "halt_new_entries") if c in kw]
+        cols = [c for c in ("kill_switch", "halt_new_entries", "integration_armed") if c in kw]
         sets = ", ".join(f"{c} = %s" for c in cols)
         self._run(f"update control set {sets}, updated_at = now() where id = 1", tuple(kw[c] for c in cols))
