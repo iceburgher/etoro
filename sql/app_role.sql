@@ -7,7 +7,7 @@ do $$ begin
   end if;
 end $$;
 grant usage on schema public to guldagenten_app;
-grant select, insert, update, delete on agent_state, job_locks, order_intents, events, incidents, control
+grant select, insert, update, delete on agent_state, job_locks, order_intents, events, incidents, control, shadow_bars
   to guldagenten_app;
 grant usage, select on all sequences in schema public to guldagenten_app;
 -- RLS är på för alla tabeller; rollen får allt, REST-API-rollerna (anon, authenticated) inget.
@@ -17,3 +17,4 @@ create policy app_all on order_intents for all to guldagenten_app using (true) w
 create policy app_all on events        for all to guldagenten_app using (true) with check (true);
 create policy app_all on incidents     for all to guldagenten_app using (true) with check (true);
 create policy app_all on control       for all to guldagenten_app using (true) with check (true);
+create policy app_all on shadow_bars   for all to guldagenten_app using (true) with check (true);
