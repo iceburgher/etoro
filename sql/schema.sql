@@ -63,6 +63,16 @@ insert into control (id) values (1) on conflict do nothing;
 -- En enda armerad integrationsaffär får passera kill switch (bara REAL_MICRO + REAL_MICRO_INTEGRATION=1).
 alter table control add column if not exists integration_armed boolean not null default false;
 
+-- Skuggläge (steg 2): en rad per färdig 4H-stapel. Miljöklassning + vad varje papperstrategi hade velat göra.
+create table if not exists shadow_bars (
+    bar         text primary key,              -- stapelns starttid (ISO, UTC)
+    close       double precision not null,
+    env         jsonb not null,
+    sides       jsonb not null,
+    git_sha     text,
+    created_at  timestamptz not null default now()
+);
+
 -- Supabase exponerar public-schemat via sitt REST-API. RLS utan policyer stänger det helt;
 -- agenten ansluter direkt som databasägare och påverkas inte.
 alter table agent_state   enable row level security;
@@ -71,3 +81,4 @@ alter table order_intents enable row level security;
 alter table events        enable row level security;
 alter table incidents     enable row level security;
 alter table control       enable row level security;
+alter table shadow_bars   enable row level security;

@@ -9,7 +9,7 @@ verifiera -> stäm av igen -> spara -> släpp lås. Allt loggas med git-SHA.
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from . import strategy_v1
+from . import shadow, strategy_v1
 from .alerts import CRITICAL, NORMAL
 from .config import Config
 from .execution import ExecutionEngine
@@ -97,6 +97,24 @@ class Engine:
                 self.store.release_lock(self.cfg.lock_name, holder)
             except Exception as e:
                 self.log(event="lock_release_failed", error=str(e))  # låset går ut av sig självt (lease)
+
+    def run_shadow(self) -> str:
+        """Skuggläge efter handelsjobbet, utanför låset. Rör aldrig tillstånd eller ordrar; fel loggas och sväljs."""
+        try:
+            now = self.clock()
+            latest = bar_id(latest_completed_4h(now))
+            res = shadow.record(self.broker, self.store, self.cfg, self.st, latest, now, bar_id)
+            if res == "recorded":
+                self.log(event="shadow_recorded", bar=latest)
+            elif res not in ("already", "waiting_for_strategy", "disabled_outside_production"):
+                self.log(event="shadow_skipped", bar=latest, reason=res)
+            return res
+        except Exception as e:  # skuggdelen får aldrig påverka handeln
+            try:
+                self.log(event="shadow_error", error=repr(e))
+            except Exception:
+                pass
+            return "error"
 
     def _startup(self):
         if self.eligibility is not None:

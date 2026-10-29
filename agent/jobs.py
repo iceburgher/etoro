@@ -44,7 +44,10 @@ def handle(job: str, authorization: str | None) -> tuple[int, dict]:
     cfg = Config()
     try:
         eng = build_engine(cfg, alert)
+        started = time.monotonic()
         result = eng.run_job(job)
+        if result not in ("locked", "db_error") and time.monotonic() - started < 30:
+            eng.run_shadow()   # skuggläge: efter handeln, aldrig före
         return 200, {"job": job, "result": result, "mode": cfg.effective_mode, "git_sha": cfg.git_sha}
     except Exception as e:  # ohanterat fel i jobbet: kritiskt larm, 500 så att Vercel visar felet
         alert(CRITICAL, "job_failure", f"Ohanterat fel i {job}", error=repr(e), git_sha=cfg.git_sha)

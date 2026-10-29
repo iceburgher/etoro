@@ -24,6 +24,7 @@ class MemoryStore:
         self.intents: dict[str, dict] = {}
         self.events: list[dict] = []
         self.incidents: list[dict] = []
+        self.shadow: dict[str, dict] = {}
         self.ctrl = {"kill_switch": False, "halt_new_entries": False, "integration_armed": False}
         self.fail_saves_after: int | None = None   # testkrok: kasta DatabaseError från och med N:e sparningen
         self.saves = 0
@@ -75,6 +76,15 @@ class MemoryStore:
         for i in self.incidents:
             if i["kind"] == kind:
                 i["resolved"] = True
+
+    def has_shadow_bar(self, bar: str) -> bool:
+        return bar in self.shadow
+
+    def save_shadow_bar(self, bar: str, close: float, env: dict, sides: dict, git_sha: str) -> None:
+        self.shadow.setdefault(bar, {"bar": bar, "close": close, "env": env, "sides": sides, "git_sha": git_sha})
+
+    def shadow_rows(self) -> list[dict]:
+        return [self.shadow[k] for k in sorted(self.shadow)]
 
     def control(self) -> dict:
         return dict(self.ctrl)
@@ -162,6 +172,18 @@ class PgStore:
 
     def resolve_incidents(self, kind: str) -> None:
         self._run("update incidents set resolved_at = now() where kind = %s and resolved_at is null", (kind,))
+
+    def has_shadow_bar(self, bar: str) -> bool:
+        return self._run("select 1 from shadow_bars where bar = %s", (bar,), fetch="one") is not None
+
+    def save_shadow_bar(self, bar: str, close: float, env: dict, sides: dict, git_sha: str) -> None:
+        self._run("""insert into shadow_bars (bar, close, env, sides, git_sha) values (%s, %s, %s, %s, %s)
+                     on conflict (bar) do nothing""",
+                  (bar, close, json.dumps(env, default=str), json.dumps(sides), git_sha))
+
+    def shadow_rows(self) -> list[dict]:
+        rows = self._run("select bar, close, env, sides, git_sha from shadow_bars order by bar", fetch="all")
+        return [dict(zip(("bar", "close", "env", "sides", "git_sha"), r)) for r in rows]
 
     def control(self) -> dict:
         row = self._run("select kill_switch, halt_new_entries, integration_armed from control where id = 1",

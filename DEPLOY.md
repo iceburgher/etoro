@@ -16,6 +16,8 @@ agent/strategy_v1.py strategi gld-v1.1 (fryst)
 agent/sizing.py      SEK-kapital -> USD-risk -> enheter (nedåt) -> förlust i USD och SEK
 agent/broker.py      eToro-API
 agent/report.py      rapport efter integrationsaffären
+agent/shadow.py      skuggläge (steg 2): miljöklassning + papperstrategier, inga ordrar
+agent/shadow_report.py  papperssiffror per strategi och miljö (python -m agent.shadow_report)
 sql/schema.sql       databasschema
 research/backtest.py backtest
 ```
@@ -104,3 +106,13 @@ Efter integrationsaffären: `update control set halt_new_entries = false;` förs
 8. Först efter godkänd rapport: sätt `REAL_MICRO_INTEGRATION=0` i Vercel, deploya om samma tagg och kör
    `update control set halt_new_entries = false;`. Så länge `REAL_MICRO_INTEGRATION=1` blockerar riskmotorn
    alla nya öppningar när en riktig öppning finns i `order_intents`, oavsett halt-flaggan.
+
+## Skuggläge (steg 2)
+
+Efter varje färdig 4H-stapel sparas en rad i `shadow_bars`: stapelns stängning, miljöklassning (dagsriktning,
+trendstyrka, volatilitet) och vad fem strategier hade velat göra: `bh` (köp och behåll, ribban), `sma200`,
+`donchian` (55/20), `tsmom` (12 mån) och `gld-v1.1` (agentens egen). Det körs EFTER handelsjobbet, utanför
+låset, i en egen try/except. Det lägger inga ordrar, ändrar inget tillstånd och loggar `shadow_recorded`,
+`shadow_skipped` eller `shadow_error`. Bara production skriver (preview/development hoppar över).
+Papperssiffrorna är 1x utan avgifter; läs dem som riktning och timing, inte som förväntad vinst.
+Rapport: `python -m agent.shadow_report`. Tabellen skapades 29 okt (migrationen `add_shadow_bars`).
