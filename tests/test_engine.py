@@ -323,3 +323,42 @@ def test_armed_does_not_send_real_orders_in_dry_run():
     s.reg, s.sig = "LONG", {"LONG": "trigger"}
     S(eng)
     assert not b.opened
+
+
+# ---------- eToro visar nya positioner med fördröjning (verklig affär 29 okt) ----------
+def lagging_snapshots(b, hidden_calls):
+    """Portföljen utelämnar positioner som öppnats nyss under de första `hidden_calls` avläsningarna."""
+    real, state = b.snapshot, {"left": hidden_calls}
+
+    def snapshot():
+        snap = real()
+        if state["left"] > 0 and b.opened:
+            state["left"] -= 1
+            return type(snap)(snap.currency_id, snap.api_reported_value, (), snap.pending_instruments)
+        return snap
+    b.snapshot = snapshot
+
+
+def test_fresh_fill_missing_from_snapshot_is_not_a_closure():
+    eng, b, s, c, logs = make()
+    lagging_snapshots(b, 1)
+    s.reg, s.sig = "SHORT", {"SHORT": "trigger"}
+    assert S(eng) == "filled"
+    assert events(logs, "broker_closed") == []
+    assert "reconciliation_mismatch" not in alerts(eng)
+    assert not eng.st.last_exit_bar
+    assert eng.st.realized_day_usd == 0.0 and eng.st.realized_week_usd == 0.0
+    assert M(eng) == "no_action"          # positionen syns nu
+    assert "unexpected_broker_position" not in alerts(eng)
+    assert sides(b) == ["SHORT"]
+
+
+def test_position_that_never_shows_up_is_treated_as_closed_after_grace():
+    eng, b, s, c, logs = make()
+    lagging_snapshots(b, 99)
+    s.reg, s.sig = "LONG", {"LONG": "trigger"}
+    S(eng)
+    assert events(logs, "broker_closed") == []
+    c.minutes(10)
+    M(eng)
+    assert len(events(logs, "broker_closed")) == 1

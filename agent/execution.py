@@ -102,7 +102,8 @@ class ExecutionEngine:
         for pid in position_ids:
             st.known_positions.setdefault(str(pid), {
                 "side": side, "units": ta.position_size if ta else 0.0, "open_rate": ta.proposed_entry if ta else 0.0,
-                "stop": ta.proposed_stop if ta else None, "target": ta.proposed_target if ta else None})
+                "stop": ta.proposed_stop if ta else None, "target": ta.proposed_target if ta else None,
+                "unconfirmed": True})  # syns kanske inte i portföljen direkt; se Engine._awaiting_snapshot
 
     # ---------- stängning ----------
     def _close(self, ta: TradeAction, st: State, now: datetime) -> str:

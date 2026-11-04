@@ -48,6 +48,7 @@ class Config:
     order_poll_tries: int = 8
     order_poll_sleep_s: float = 2.0
     pending_timeout_s: int = 600
+    new_position_grace_s: int = 180      # eToros portfölj kan släpa efter en fyllning: så länge väntar vi innan "försvunnen"
     api_failure_alert_after: int = 3
     kill_switch_env: bool = field(default_factory=lambda: _env("KILL_SWITCH", "0").lower() in ("1", "yes", "on", "true"))
 

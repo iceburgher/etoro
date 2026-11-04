@@ -325,6 +325,8 @@ class Engine:
                                remaining=remaining)
         for pid, meta in list(st.known_positions.items()):
             if int(pid) not in mine and pid not in handled:
+                if self._awaiting_snapshot(meta, now):
+                    continue  # nyss fylld, portföljen släpar: varken stängd eller okänd än
                 pnl = self._realize(meta, quote)
                 st.last_exit_bar = latest
                 kind = self._broker_exit_kind(meta, quote)
@@ -339,9 +341,18 @@ class Engine:
             if str(pid) not in st.known_positions and not (p and p["kind"] == "open"):
                 self.alert(CRITICAL, "unexpected_broker_position", f"Okänd position {pid} hos eToro",
                            position_id=pid, side=pos.side.value, has_stop=pos.has_stop)
+        waiting = {pid: meta for pid, meta in st.known_positions.items()
+                   if int(pid) not in mine and self._awaiting_snapshot(meta, now)}
         st.known_positions = {str(pid): {"side": pos.side.value, "units": pos.units, "open_rate": pos.open_rate,
                                          "stop": pos.stop_loss, "target": pos.take_profit}
-                              for pid, pos in mine.items()}
+                              for pid, pos in mine.items()} | waiting
+
+    def _awaiting_snapshot(self, meta: dict, now: datetime) -> bool:
+        """Position som agenten själv fått fylld men som portföljen inte visar än, inom en kort frist."""
+        if not meta.get("unconfirmed"):
+            return False
+        since = datetime.fromisoformat(meta.setdefault("since", now.isoformat()))
+        return (now - since).total_seconds() < self.cfg.new_position_grace_s
 
     @staticmethod
     def _broker_exit_kind(meta: dict, quote) -> str:
@@ -361,7 +372,10 @@ class Engine:
         mine = snap.for_instrument(self.cfg.instrument)
         longs, shorts = [p for p in mine if p.is_buy], [p for p in mine if not p.is_buy]
         conflict = bool(longs and shorts)
-        if conflict or self.st.pending or self.cfg.instrument in snap.pending_instruments:
+        mine_ids = {p.position_id for p in mine}
+        awaiting = any(int(pid) not in mine_ids and meta.get("unconfirmed")
+                       for pid, meta in self.st.known_positions.items())
+        if conflict or self.st.pending or awaiting or self.cfg.instrument in snap.pending_instruments:
             return Actual.PENDING, conflict
         return (Actual.LONG if longs else Actual.SHORT if shorts else Actual.FLAT), False
 
