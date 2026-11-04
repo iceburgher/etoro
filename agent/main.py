@@ -12,17 +12,19 @@ def log(**kw):
     print(json.dumps({"t": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), **kw}, ensure_ascii=False), flush=True)
 
 
-def account_numbers(pf: dict) -> tuple[float, float]:
-    """(equity, invested). Verifiera fältnamnen mot första riktiga svaret (körs i dry-run först)."""
-    equity = float(pf.get("totalValue") or pf.get("equity") or 0)
-    invested = float(pf.get("invested") or pf.get("totalInvested") or 0)
+def account_numbers(pf: dict, capital: float) -> tuple[float, float]:
+    """(equity, invested), alltid begränsat till capital_usd (kontots virtuella saldo är mycket större)."""
+    cp = pf.get("clientPortfolio", pf)
+    invested = sum(float(p.get("amount") or 0) for p in cp.get("positions", []))
+    credit = float(cp.get("credit") or 0)
+    equity = min(credit + invested, capital)
     return equity, invested
 
 
 def step(cfg: Config, api: Etoro, st: risk.State | None):
     today = dt.date.today().isoformat()
     pf = api.portfolio()
-    equity, invested = account_numbers(pf)
+    equity, invested = account_numbers(pf, cfg.capital_usd)
     if equity <= 0:
         log(event="stop", reason="kunde inte läsa kontovärde", raw_keys=list(pf)[:10])
         return st

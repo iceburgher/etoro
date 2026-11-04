@@ -8,6 +8,7 @@ class Config:
     # Bara dessa instrument får handlas. Allt annat blockeras.
     allowed_instruments: tuple = (3025,)  # 3025 = GLD (guld-ETF). 18 = GOLD (CFD), 4365 = IAU
     # Risk (i USD / procent)
+    capital_usd: float = 1000.0          # hårt tak: agenten räknar aldrig med mer än så
     max_per_trade_pct: float = 0.20      # max andel av kontot per trade
     max_total_exposure_pct: float = 0.40  # max andel av kontot investerat totalt
     stop_loss_pct: float = 0.03          # obligatorisk stop loss under inköpspris
