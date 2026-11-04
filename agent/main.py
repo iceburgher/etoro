@@ -1,4 +1,6 @@
 import argparse
+import dataclasses
+import os
 import datetime as dt
 import json
 import time
@@ -6,6 +8,21 @@ import time
 from . import ai_filter, risk, strategy
 from .config import Config
 from .etoro import Etoro
+
+
+STATE_FILE = os.getenv("STATE_FILE", "state.json")
+
+
+def load_state():
+    try:
+        return risk.State(**json.load(open(STATE_FILE)))
+    except Exception:
+        return None
+
+
+def save_state(st):
+    if st:
+        json.dump(dataclasses.asdict(st), open(STATE_FILE, "w"))
 
 
 def log(**kw):
@@ -63,10 +80,11 @@ def main():
     cfg = Config()
     api = Etoro(cfg.base_url)
     log(event="start", live=cfg.live, instruments=cfg.allowed_instruments)
-    st = None
+    st = load_state()
     while True:
         try:
             st = step(cfg, api, st)
+            save_state(st)
         except Exception as e:  # aldrig krascha tyst, aldrig handla på fel
             log(event="error", error=str(e))
         if args.once:

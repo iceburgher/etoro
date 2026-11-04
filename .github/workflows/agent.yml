@@ -1,0 +1,38 @@
+name: gold-agent
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+concurrency:
+  group: gold-agent
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install requests anthropic
+      - name: Restore state
+        uses: actions/cache/restore@v4
+        with:
+          path: state.json
+          key: agent-state-${{ github.run_id }}
+          restore-keys: agent-state-
+      - name: Run agent
+        env:
+          ETORO_USER_KEY: ${{ secrets.ETORO_USER_KEY }}
+          ETORO_API_KEY: ${{ secrets.ETORO_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Nödbroms: sätt variabeln LIVE till "no" (eller ta bort den) för att stoppa riktig handel.
+          LIVE: ${{ vars.LIVE }}
+        run: python -m agent.main --once
+      - name: Save state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: state.json
+          key: agent-state-${{ github.run_id }}
