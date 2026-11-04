@@ -4,8 +4,6 @@ python -m agent.main --job monitor|strategy
 Med DATABASE_URL används PostgreSQL, annars minnet (inget sparas mellan körningar).
 """
 import argparse
-import dataclasses
-import os
 import datetime as dt
 import os
 import time
